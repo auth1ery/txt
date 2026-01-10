@@ -21,30 +21,24 @@ a{color:var(--sub);text-decoration:none}
   bottom: 10px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0,0,0,0.3);
-  color: #fff;
-  padding: 0.4rem 0.8rem;
-  border-radius: 0.4rem;
-  font-size: 0.85rem;
+  color: rgba(255,255,255,0.5);
+  font-size:0.85rem;
   text-transform: lowercase;
   z-index: 999;
 }
-.light #counter{
-  background: rgba(255,255,255,0.3);
-  color: #000;
-}
+.light #counter{color: rgba(0,0,0,0.5);}
 </style>
 </head>
 <body>
 <div id="app">
 <h2>txt</h2>
-<button onclick="toggleTheme()">theme</button>
+<a href="/settings.html">settings</a>
 <textarea id="postInput" maxlength="200" placeholder="write"></textarea>
 <button onclick="createPost()">post</button>
 <div id="posts"></div>
-<button id="more" onclick="load()">refresh</button>
+<button id="more" onclick="load()">more posts</button>
+<button onclick="location.reload()">refresh</button>
 </div>
-
 <div id="counter">actions remaining: 20/20</div>
 
 <script>
@@ -92,7 +86,7 @@ async function load(){
     div.className="post"
     div.innerHTML=`<div>${p.content}</div>
       <div class="meta">
-        <a href="/@${p.nickname}">@${p.nickname}</a> · ${timeAgo(p.created_at)} · ${p.score} 
+        <a href="/profile.html/${p.nickname}">@${p.nickname}</a> · ${timeAgo(p.created_at)} · ${p.score} 
         <button onclick="react(${p.id},1)">+</button> 
         <button onclick="react(${p.id},-1)">-</button> 
         <button onclick="toggleComments(${p.id})">comments</button>
@@ -111,52 +105,35 @@ async function load(){
   offset+=20
 }
 
-function toggleComments(id){
-  document.getElementById("c"+id).classList.toggle("hidden")
-}
+function toggleComments(id){document.getElementById("c"+id).classList.toggle("hidden")}
 
 async function createPost(){
+  if(remaining<=0) return alert("rate limit reached")
   const i=document.getElementById("postInput")
-  const r = await fetch("/api/posts",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({nickname,content:i.value})
-  })
+  const r=await fetch("/api/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,content:i.value})})
   const data=await r.json()
   updateCounter(data.remaining)
   i.value=""
-  location.reload()
+  load()
 }
 
 async function react(id,v){
-  const r = await fetch("/api/react",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({nickname,post_id:id,value:v})
-  })
+  if(remaining<=0) return alert("rate limit reached")
+  const r=await fetch("/api/react",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id:id,value:v})})
   const data=await r.json()
   updateCounter(data.remaining)
-  location.reload()
 }
 
 async function comment(id,el){
-  const r = await fetch("/api/comments",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({nickname,post_id:id,content:el.value})
-  })
+  if(remaining<=0) return alert("rate limit reached")
+  const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id:id,content:el.value})})
   const data=await r.json()
   updateCounter(data.remaining)
-  location.reload()
-}
-
-function toggleTheme(){
-  document.body.classList.toggle("light")
-  localStorage.setItem("theme",document.body.classList.contains("light"))
+  el.value=""
+  load()
 }
 
 if(localStorage.getItem("theme")==="true") document.body.classList.add("light")
-
 pickName().then(load)
 </script>
 </body>
