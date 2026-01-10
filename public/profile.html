@@ -2,25 +2,31 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>profile</title>
+<title>Profile</title>
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
-a,button{color:#aaa;text-decoration:none;cursor:pointer;margin:.2rem}
-a:hover,button:hover{color:#fff}
+h2{margin-bottom:.2rem}
+p{margin:.2rem 0;font-size:0.9rem;color:#aaa}
+button{padding:.4rem .8rem;margin:.5rem 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+a{color:#aaa;text-decoration:none}
+a:hover{color:#fff}
 </style>
 </head>
 <body>
 <div id="app">
-<h2 id="name"></h2>
+<button onclick="history.back()">← back</button>
+<h2 id="nickname"></h2>
 <p id="join"></p>
 <p id="counts"></p>
-<button onclick="history.back()">back</button>
 </div>
+
 <script>
 const nick = location.pathname.split("/profile.html/")[1]
+
 fetch("/api/profile/"+nick).then(r=>r.json()).then(d=>{
-  document.getElementById("name").textContent = "@"+d.nickname
+  document.getElementById("nickname").textContent = "@"+d.nickname
   const date = new Date(d.created_at)
   document.getElementById("join").textContent = "Joined: "+date.toDateString()
   document.getElementById("counts").textContent = `Posts: ${d.posts} · Comments: ${d.comments}`
