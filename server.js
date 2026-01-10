@@ -33,30 +33,14 @@ CREATE TABLE IF NOT EXISTS reactions (
 CREATE TABLE IF NOT EXISTS comments (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   post_id INTEGER,
+  parent_id INTEGER DEFAULT NULL,
   nickname TEXT,
   content TEXT,
   created_at INTEGER
 );
-CREATE TABLE IF NOT EXISTS rate_limits (
-  nickname TEXT PRIMARY KEY,
-  count INTEGER,
-  window_start INTEGER
-);
 `)
 
 const postCache = { data: [], timestamp: 0 }
-
-function rateLimit(nickname){
-  const now = Date.now()
-  const row = db.prepare("SELECT * FROM rate_limits WHERE nickname=?").get(nickname)
-  if(!row || now - row.window_start > 60000){
-    db.prepare("INSERT OR REPLACE INTO rate_limits VALUES(?,1,?)").run(nickname, now)
-    return { ok:true, remaining:19 }
-  }
-  if(row.count>=20) return { ok:false, remaining:0 }
-  db.prepare("UPDATE rate_limits SET count=count+1 WHERE nickname=?").run(nickname)
-  return { ok:true, remaining:20-(row.count+1) }
-}
 
 app.post("/api/nickname",(req,res)=>{
   const nickname=req.body.nickname?.trim().toLowerCase()
@@ -93,29 +77,24 @@ app.get("/api/posts",(req,res)=>{
 
 app.post("/api/posts",(req,res)=>{
   const { nickname, content } = req.body
-  const rl = rateLimit(nickname)
-  if(!rl.ok) return res.status(429).json({remaining:0})
   if(!content || content.length>200) return res.sendStatus(400)
-  db.prepare("INSERT INTO posts(nickname,content,created_at) VALUES(?,?,?)").run(nickname, content, Date.now())
-  res.json({remaining: rl.remaining})
+  const r = db.prepare("INSERT INTO posts(nickname,content,created_at) VALUES(?,?,?)").run(nickname, content, Date.now())
+  res.json({id: r.lastInsertRowid})
 })
 
 app.post("/api/react",(req,res)=>{
   const { nickname, post_id, value } = req.body
-  const rl = rateLimit(nickname)
-  if(!rl.ok) return res.status(429).json({remaining:0})
   if(![1,-1].includes(value)) return res.sendStatus(400)
   db.prepare("INSERT OR REPLACE INTO reactions VALUES(?,?,?)").run(post_id,nickname,value)
-  res.json({remaining: rl.remaining})
+  const score = db.prepare("SELECT IFNULL(SUM(value),0) c FROM reactions WHERE post_id=?").get(post_id).c
+  res.json({score})
 })
 
 app.post("/api/comments",(req,res)=>{
-  const { nickname, post_id, content } = req.body
-  const rl = rateLimit(nickname)
-  if(!rl.ok) return res.status(429).json({remaining:0})
+  const { nickname, post_id, content, parent_id } = req.body
   if(!content || content.length>100) return res.sendStatus(400)
-  db.prepare("INSERT INTO comments(post_id,nickname,content,created_at) VALUES(?,?,?,?)").run(post_id,nickname,content,Date.now())
-  res.json({remaining: rl.remaining})
+  const r = db.prepare("INSERT INTO comments(post_id,parent_id,nickname,content,created_at) VALUES(?,?,?,?,?)").run(post_id,parent_id||null,nickname,content,Date.now())
+  res.json({id:r.lastInsertRowid})
 })
 
 app.get("/api/profile/:nick",(req,res)=>{
