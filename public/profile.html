@@ -8,7 +8,7 @@
 .light{--bg:#fff;--fg:#000;--sub:#555;--border:#ddd}
 body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
 #app{max-width:600px;margin:auto;padding:1rem}
-button{background:none;border:none;color:var(--sub)}
+button{background:none;border:none;color:var(--sub);cursor:pointer}
 </style>
 </head>
 <body>
@@ -17,12 +17,10 @@ button{background:none;border:none;color:var(--sub)}
 <p id="join"></p>
 <p id="counts"></p>
 <button onclick="history.back()">back</button>
-<button onclick="toggleTheme()">theme</button>
 </div>
 <script>
-function toggleTheme(){document.body.classList.toggle("light");localStorage.setItem("theme",document.body.classList.contains("light"))}
-if(localStorage.getItem("theme")==="true")document.body.classList.add("light")
-const nick=location.pathname.split("/@/")[1]
+if(localStorage.getItem("theme")==="true") document.body.classList.add("light")
+const nick=location.pathname.split("/profile.html/")[1]
 fetch("/api/profile/"+nick).then(r=>r.json()).then(d=>{
   document.getElementById("name").textContent="@"+d.nickname
   const date=new Date(d.created_at)
