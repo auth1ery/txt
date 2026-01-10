@@ -133,5 +133,4 @@ app.get("/@/:nick",(req,res)=>{
   res.sendFile(path.join(__dirname,"public","profile.html"))
 })
 
-const PORT = process.env.PORT || 3000
 app.listen(PORT)
