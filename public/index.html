@@ -4,40 +4,40 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>txt</title>
 <style>
-:root{--bg:#0f0f0f;--fg:#eaeaea;--sub:#777;--border:#222}
-.light{--bg:#fff;--fg:#000;--sub:#555;--border:#ddd}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
-textarea,input{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:.5rem;margin-top:.3rem}
-button{background:none;border:none;color:var(--sub);cursor:pointer}
-.post{border-bottom:1px solid var(--border);padding:.75rem 0}
-.meta{font-size:.8rem;color:var(--sub)}
-.comment{font-size:.85rem;margin-left:1rem;color:var(--sub)}
+textarea{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0}
+button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+.post{border-bottom:1px solid #222;padding:.5rem 0}
+.meta{font-size:.8rem;color:#777;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
+.comment{font-size:.85rem;margin-left:1rem;color:#777}
 .hidden{display:none}
-a{color:var(--sub);text-decoration:none}
-#more{margin:1rem 0;display:block}
+a{color:#777;text-decoration:none}
+a:hover{color:#fff}
+#more,#refresh{display:inline-block;margin:.5rem 0}
 #counter{
   position: fixed;
-  bottom: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  color: rgba(255,255,255,0.5);
-  font-size:0.85rem;
+  bottom:5px;
+  left:50%;
+  transform:translateX(-50%);
+  font-size:0.7rem;
+  color:rgba(255,255,255,0.3);
   text-transform: lowercase;
-  z-index: 999;
+  z-index:999;
 }
-.light #counter{color: rgba(0,0,0,0.5);}
 </style>
 </head>
 <body>
 <div id="app">
 <h2>txt</h2>
-<a href="/settings.html">settings</a>
 <textarea id="postInput" maxlength="200" placeholder="write"></textarea>
-<button onclick="createPost()">post</button>
+<div style="display:flex;gap:.5rem;flex-wrap:wrap">
+  <button onclick="createPost()">post</button>
+  <button id="more" onclick="load()">more posts</button>
+  <button id="refresh" onclick="location.reload()">refresh</button>
+</div>
 <div id="posts"></div>
-<button id="more" onclick="load()">more posts</button>
-<button onclick="location.reload()">refresh</button>
 </div>
 <div id="counter">actions remaining: 20/20</div>
 
@@ -60,21 +60,14 @@ async function pickName(){
   while(!nickname){
     const n=prompt("nickname (15 max)")
     if(!n) continue
-    const r=await fetch("/api/nickname",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({nickname:n})
-    })
-    if(r.status===200){
-      nickname=n.toLowerCase()
-      localStorage.setItem("nickname",nickname)
-    }
+    const r=await fetch("/api/nickname",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname:n})})
+    if(r.status===200){nickname=n.toLowerCase();localStorage.setItem("nickname",nickname)}
   }
 }
 
 function updateCounter(r){
   remaining=r
-  document.getElementById("counter").textContent = `actions remaining: ${remaining}/20`
+  document.getElementById("counter").textContent=`actions remaining: ${remaining}/20`
 }
 
 async function load(){
@@ -86,9 +79,11 @@ async function load(){
     div.className="post"
     div.innerHTML=`<div>${p.content}</div>
       <div class="meta">
-        <a href="/profile.html/${p.nickname}">@${p.nickname}</a> · ${timeAgo(p.created_at)} · ${p.score} 
-        <button onclick="react(${p.id},1)">+</button> 
-        <button onclick="react(${p.id},-1)">-</button> 
+        <a href="/profile.html/${p.nickname}">@${p.nickname}</a>
+        <span>${timeAgo(p.created_at)}</span>
+        <span>score: ${p.score}</span>
+        <button onclick="react(${p.id},1)">+</button>
+        <button onclick="react(${p.id},-1)">-</button>
         <button onclick="toggleComments(${p.id})">comments</button>
       </div>
       <div id="c${p.id}" class="hidden">
@@ -133,7 +128,6 @@ async function comment(id,el){
   load()
 }
 
-if(localStorage.getItem("theme")==="true") document.body.classList.add("light")
 pickName().then(load)
 </script>
 </body>
