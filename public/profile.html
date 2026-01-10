@@ -4,11 +4,10 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>profile</title>
 <style>
-:root{--bg:#0f0f0f;--fg:#eaeaea;--sub:#777;--border:#222}
-.light{--bg:#fff;--fg:#000;--sub:#555;--border:#ddd}
-body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
-button{background:none;border:none;color:var(--sub);cursor:pointer}
+a,button{color:#aaa;text-decoration:none;cursor:pointer;margin:.2rem}
+a:hover,button:hover{color:#fff}
 </style>
 </head>
 <body>
@@ -19,13 +18,12 @@ button{background:none;border:none;color:var(--sub);cursor:pointer}
 <button onclick="history.back()">back</button>
 </div>
 <script>
-if(localStorage.getItem("theme")==="true") document.body.classList.add("light")
-const nick=location.pathname.split("/profile.html/")[1]
+const nick = location.pathname.split("/profile.html/")[1]
 fetch("/api/profile/"+nick).then(r=>r.json()).then(d=>{
-  document.getElementById("name").textContent="@"+d.nickname
-  const date=new Date(d.created_at)
-  document.getElementById("join").textContent="Joined: "+date.toDateString()
-  document.getElementById("counts").textContent=`Posts: ${d.posts} · Comments: ${d.comments}`
+  document.getElementById("name").textContent = "@"+d.nickname
+  const date = new Date(d.created_at)
+  document.getElementById("join").textContent = "Joined: "+date.toDateString()
+  document.getElementById("counts").textContent = `Posts: ${d.posts} · Comments: ${d.comments}`
 })
 </script>
 </body>
