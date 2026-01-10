@@ -4,127 +4,178 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>txt</title>
 <style>
+:root {
+  --bg:#0f0f0f;
+  --fg:#eaeaea;
+  --sub:#777;
+  --border:#222;
+}
+.light {
+  --bg:#ffffff;
+  --fg:#000000;
+  --sub:#555;
+  --border:#ddd;
+}
 body {
-  font-family: system-ui, sans-serif;
-  background: #0f0f0f;
-  color: #eaeaea;
-  margin: 0;
-  padding: 1rem;
+  margin:0;
+  background:var(--bg);
+  color:var(--fg);
+  font-family:system-ui,sans-serif;
 }
 #app {
-  max-width: 600px;
-  margin: auto;
+  max-width:600px;
+  margin:auto;
+  padding:1rem;
 }
-textarea, input {
-  width: 100%;
-  background: #111;
-  color: #fff;
-  border: 1px solid #222;
-  padding: 0.5rem;
+textarea,input {
+  width:100%;
+  background:var(--bg);
+  color:var(--fg);
+  border:1px solid var(--border);
+  padding:.5rem;
 }
 button {
-  background: none;
-  border: none;
-  color: #888;
+  background:none;
+  border:none;
+  color:var(--sub);
 }
 .post {
-  border-bottom: 1px solid #222;
-  padding: 0.75rem 0;
+  border-bottom:1px solid var(--border);
+  padding:.75rem 0;
 }
 .meta {
-  font-size: 0.8rem;
-  color: #777;
+  font-size:.8rem;
+  color:var(--sub);
 }
 .comment {
-  font-size: 0.85rem;
-  margin-left: 1rem;
-  color: #bbb;
+  font-size:.85rem;
+  margin-left:1rem;
+  color:var(--sub);
+}
+.hidden {
+  display:none;
+}
+a {
+  color:var(--sub);
+  text-decoration:none;
 }
 </style>
 </head>
 <body>
 <div id="app">
 <h2>txt</h2>
-<textarea id="postInput" maxlength="200" placeholder="write something"></textarea>
-<button onclick="post()">post</button>
+<button onclick="toggleTheme()">theme</button>
+<textarea id="postInput" maxlength="200" placeholder="write"></textarea>
+<button onclick="createPost()">post</button>
 <div id="posts"></div>
+<button id="more" onclick="load()">refresh</button>
 </div>
 
 <script>
 let nickname = localStorage.getItem("nickname")
+let offset = 0
+
+function timeAgo(t) {
+  const s = Math.floor((Date.now() - t) / 1000)
+  if (s < 60) return s+"s ago"
+  const m = Math.floor(s/60)
+  if (m < 60) return m+"m ago"
+  const h = Math.floor(m/60)
+  if (h < 24) return h+"h ago"
+  const d = Math.floor(h/24)
+  if (d < 7) return d+"d ago"
+  return Math.floor(d/7)+"w ago"
+}
 
 async function pickName() {
   while (!nickname) {
-    const name = prompt("pick a nickname (max 15 chars)")
-    if (!name) continue
-    const res = await fetch("/api/nickname", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nickname: name })
+    const n = prompt("nickname (15 max)")
+    if (!n) continue
+    const r = await fetch("/api/nickname", {
+      method:"POST",
+      headers:{ "Content-Type":"application/json" },
+      body:JSON.stringify({ nickname:n })
     })
-    if (res.status === 200) {
-      nickname = name.toLowerCase()
-      localStorage.setItem("nickname", nickname)
+    if (r.status===200) {
+      nickname=n.toLowerCase()
+      localStorage.setItem("nickname",nickname)
     }
   }
 }
 
 async function load() {
-  const res = await fetch("/api/posts")
-  const data = await res.json()
+  const r = await fetch("/api/posts?offset="+offset)
+  const d = await r.json()
   const el = document.getElementById("posts")
-  el.innerHTML = ""
 
-  data.posts.forEach(p => {
+  d.posts.forEach(p => {
     const div = document.createElement("div")
-    div.className = "post"
-    div.innerHTML = `
+    div.className="post"
+    div.innerHTML=`
       <div>${p.content}</div>
-      <div class="meta">@${p.nickname} · ${p.score}
+      <div class="meta">
+        <a href="/@${p.nickname}">@${p.nickname}</a>
+        · ${timeAgo(p.created_at)}
+        · ${p.score}
         <button onclick="react(${p.id},1)">+</button>
         <button onclick="react(${p.id},-1)">-</button>
+        <button onclick="toggleComments(${p.id})">comments</button>
       </div>
-      <input maxlength="100" placeholder="comment" onkeydown="if(event.key==='Enter') comment(${p.id}, this)">
+      <div id="c${p.id}" class="hidden">
+        <input maxlength="100" placeholder="comment" onkeydown="if(event.key==='Enter') comment(${p.id},this)">
+      </div>
     `
-    data.comments.filter(c => c.post_id === p.id).forEach(c => {
-      const cd = document.createElement("div")
-      cd.className = "comment"
-      cd.textContent = `@${c.nickname}: ${c.content}`
-      div.appendChild(cd)
+    d.comments.filter(c=>c.post_id===p.id).forEach(c=>{
+      const cd=document.createElement("div")
+      cd.className="comment"
+      cd.textContent=`@${c.nickname}: ${c.content}`
+      div.querySelector("#c"+p.id).appendChild(cd)
     })
     el.appendChild(div)
   })
+
+  offset += 20
 }
 
-async function post() {
-  const input = document.getElementById("postInput")
-  await fetch("/api/posts", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, content: input.value })
-  })
-  input.value = ""
-  load()
+function toggleComments(id) {
+  document.getElementById("c"+id).classList.toggle("hidden")
 }
 
-async function react(id, value) {
-  await fetch("/api/react", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, post_id: id, value })
+async function createPost() {
+  const i=document.getElementById("postInput")
+  await fetch("/api/posts",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ nickname, content:i.value })
   })
-  load()
+  i.value=""
+  location.reload()
 }
 
-async function comment(id, el) {
-  await fetch("/api/comments", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ nickname, post_id: id, content: el.value })
+async function react(id,v) {
+  await fetch("/api/react",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ nickname, post_id:id, value:v })
   })
-  el.value = ""
-  load()
+  location.reload()
 }
+
+async function comment(id,el) {
+  await fetch("/api/comments",{
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body:JSON.stringify({ nickname, post_id:id, content:el.value })
+  })
+  location.reload()
+}
+
+function toggleTheme() {
+  document.body.classList.toggle("light")
+  localStorage.setItem("theme",document.body.classList.contains("light"))
+}
+
+if (localStorage.getItem("theme")==="true") document.body.classList.add("light")
 
 pickName().then(load)
 </script>
