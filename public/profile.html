@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Profile</title>
+<title>profile</title>
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
@@ -16,21 +16,29 @@ a:hover{color:#fff}
 </head>
 <body>
 <div id="app">
-<button onclick="history.back()">← back</button>
+<button onclick="location.href='/'">← back</button>
 <h2 id="nickname"></h2>
 <p id="join"></p>
 <p id="counts"></p>
 </div>
-
 <script>
-const nick = location.pathname.split("/profile.html/")[1]
-
-fetch("/api/profile/"+nick).then(r=>r.json()).then(d=>{
-  document.getElementById("nickname").textContent = "@"+d.nickname
-  const date = new Date(d.created_at)
-  document.getElementById("join").textContent = "Joined: "+date.toDateString()
-  document.getElementById("counts").textContent = `Posts: ${d.posts} · Comments: ${d.comments}`
-})
+const nick = location.pathname.split("/profile/")[1]
+if (nick) {
+  fetch("/api/profile/"+nick)
+    .then(r => {
+      if (!r.ok) throw new Error('profile not found')
+      return r.json()
+    })
+    .then(d => {
+      document.getElementById("nickname").textContent = "@"+d.nickname
+      const date = new Date(d.created_at)
+      document.getElementById("join").textContent = "joined: "+date.toDateString()
+      document.getElementById("counts").textContent = `posts: ${d.posts} · comments: ${d.comments}`
+    })
+    .catch(err => {
+      document.getElementById("nickname").textContent = "profile not found"
+    })
+}
 </script>
 </body>
 </html>
