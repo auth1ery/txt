@@ -1,70 +1,28 @@
 <!DOCTYPE html>
 <html>
 <head>
-<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1">
 <title>txt</title>
 <style>
-:root {
-  --bg:#0f0f0f;
-  --fg:#eaeaea;
-  --sub:#777;
-  --border:#222;
-}
-.light {
-  --bg:#ffffff;
-  --fg:#000000;
-  --sub:#555;
-  --border:#ddd;
-}
-body {
-  margin:0;
-  background:var(--bg);
-  color:var(--fg);
-  font-family:system-ui,sans-serif;
-}
-#app {
-  max-width:600px;
-  margin:auto;
-  padding:1rem;
-}
-textarea,input {
-  width:100%;
-  background:var(--bg);
-  color:var(--fg);
-  border:1px solid var(--border);
-  padding:.5rem;
-}
-button {
-  background:none;
-  border:none;
-  color:var(--sub);
-}
-.post {
-  border-bottom:1px solid var(--border);
-  padding:.75rem 0;
-}
-.meta {
-  font-size:.8rem;
-  color:var(--sub);
-}
-.comment {
-  font-size:.85rem;
-  margin-left:1rem;
-  color:var(--sub);
-}
-.hidden {
-  display:none;
-}
-a {
-  color:var(--sub);
-  text-decoration:none;
-}
+:root{--bg:#0f0f0f;--fg:#eaeaea;--sub:#777;--border:#222}
+.light{--bg:#fff;--fg:#000;--sub:#555;--border:#ddd}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+#app{max-width:600px;margin:auto;padding:1rem}
+textarea,input{width:100%;background:var(--bg);color:var(--fg);border:1px solid var(--border);padding:.5rem}
+button{background:none;border:none;color:var(--sub)}
+.post{border-bottom:1px solid var(--border);padding:.75rem 0}
+.meta{font-size:.8rem;color:var(--sub)}
+.comment{font-size:.85rem;margin-left:1rem;color:var(--sub)}
+.hidden{display:none}
+a{color:var(--sub);text-decoration:none}
+#counter{margin:0.5rem 0}
 </style>
 </head>
 <body>
 <div id="app">
 <h2>txt</h2>
 <button onclick="toggleTheme()">theme</button>
+<div id="counter">Actions remaining: 20/20</div>
 <textarea id="postInput" maxlength="200" placeholder="write"></textarea>
 <button onclick="createPost()">post</button>
 <div id="posts"></div>
@@ -72,59 +30,22 @@ a {
 </div>
 
 <script>
-let nickname = localStorage.getItem("nickname")
-let offset = 0
+let nickname=localStorage.getItem("nickname"),offset=0,remaining=20
 
-function timeAgo(t) {
-  const s = Math.floor((Date.now() - t) / 1000)
-  if (s < 60) return s+"s ago"
-  const m = Math.floor(s/60)
-  if (m < 60) return m+"m ago"
-  const h = Math.floor(m/60)
-  if (h < 24) return h+"h ago"
-  const d = Math.floor(h/24)
-  if (d < 7) return d+"d ago"
-  return Math.floor(d/7)+"w ago"
-}
+function timeAgo(t){const s=Math.floor((Date.now()-t)/1000);if(s<60)return s+"s ago";const m=Math.floor(s/60);if(m<60)return m+"m ago";const h=Math.floor(m/60);if(h<24)return h+"h ago";const d=Math.floor(h/24);if(d<7)return d+"d ago";return Math.floor(d/7)+"w ago"}
 
-async function pickName() {
-  while (!nickname) {
-    const n = prompt("nickname (15 max)")
-    if (!n) continue
-    const r = await fetch("/api/nickname", {
-      method:"POST",
-      headers:{ "Content-Type":"application/json" },
-      body:JSON.stringify({ nickname:n })
-    })
-    if (r.status===200) {
-      nickname=n.toLowerCase()
-      localStorage.setItem("nickname",nickname)
-    }
-  }
-}
+async function pickName(){while(!nickname){const n=prompt("nickname (15 max)");if(!n)continue;const r=await fetch("/api/nickname",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname:n})});if(r.status===200){nickname=n.toLowerCase();localStorage.setItem("nickname",nickname)}}}
 
-async function load() {
-  const r = await fetch("/api/posts?offset="+offset)
-  const d = await r.json()
-  const el = document.getElementById("posts")
+function updateCounter(r){remaining=r;document.getElementById("counter").textContent=`Actions remaining: ${remaining}/20`}
 
-  d.posts.forEach(p => {
-    const div = document.createElement("div")
+async function load(){
+  const r=await fetch("/api/posts?offset="+offset)
+  const d=await r.json()
+  const el=document.getElementById("posts")
+  d.posts.forEach(p=>{
+    const div=document.createElement("div")
     div.className="post"
-    div.innerHTML=`
-      <div>${p.content}</div>
-      <div class="meta">
-        <a href="/@${p.nickname}">@${p.nickname}</a>
-        · ${timeAgo(p.created_at)}
-        · ${p.score}
-        <button onclick="react(${p.id},1)">+</button>
-        <button onclick="react(${p.id},-1)">-</button>
-        <button onclick="toggleComments(${p.id})">comments</button>
-      </div>
-      <div id="c${p.id}" class="hidden">
-        <input maxlength="100" placeholder="comment" onkeydown="if(event.key==='Enter') comment(${p.id},this)">
-      </div>
-    `
+    div.innerHTML=`<div>${p.content}</div><div class="meta"><a href="/@${p.nickname}">@${p.nickname}</a> · ${timeAgo(p.created_at)} · ${p.score} <button onclick="react(${p.id},1)">+</button> <button onclick="react(${p.id},-1)">-</button> <button onclick="toggleComments(${p.id})">comments</button></div><div id="c${p.id}" class="hidden"><input maxlength="100" placeholder="comment" onkeydown="if(event.key==='Enter') comment(${p.id},this)"></div>`
     d.comments.filter(c=>c.post_id===p.id).forEach(c=>{
       const cd=document.createElement("div")
       cd.className="comment"
@@ -133,50 +54,15 @@ async function load() {
     })
     el.appendChild(div)
   })
-
-  offset += 20
+  offset+=20
 }
 
-function toggleComments(id) {
-  document.getElementById("c"+id).classList.toggle("hidden")
-}
-
-async function createPost() {
-  const i=document.getElementById("postInput")
-  await fetch("/api/posts",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ nickname, content:i.value })
-  })
-  i.value=""
-  location.reload()
-}
-
-async function react(id,v) {
-  await fetch("/api/react",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ nickname, post_id:id, value:v })
-  })
-  location.reload()
-}
-
-async function comment(id,el) {
-  await fetch("/api/comments",{
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
-    body:JSON.stringify({ nickname, post_id:id, content:el.value })
-  })
-  location.reload()
-}
-
-function toggleTheme() {
-  document.body.classList.toggle("light")
-  localStorage.setItem("theme",document.body.classList.contains("light"))
-}
-
-if (localStorage.getItem("theme")==="true") document.body.classList.add("light")
-
+function toggleComments(id){document.getElementById("c"+id).classList.toggle("hidden")}
+async function createPost(){const i=document.getElementById("postInput");const r=await fetch("/api/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,content:i.value})});const data=await r.json();updateCounter(data.remaining);i.value="";location.reload()}
+async function react(id,v){const r=await fetch("/api/react",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id:id,value:v})});const data=await r.json();updateCounter(data.remaining);location.reload()}
+async function comment(id,el){const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id:id,content:el.value})});const data=await r.json();updateCounter(data.remaining);location.reload()}
+function toggleTheme(){document.body.classList.toggle("light");localStorage.setItem("theme",document.body.classList.contains("light"))}
+if(localStorage.getItem("theme")==="true")document.body.classList.add("light")
 pickName().then(load)
 </script>
 </body>
