@@ -14,6 +14,11 @@ const pool = new pg.Pool({
 })
 
 app.use(express.json())
+
+app.get("/profile/:nick", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "profile.html"))
+})
+
 app.use(express.static("public"))
 
 async function initDB() {
