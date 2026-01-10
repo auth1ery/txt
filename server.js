@@ -3,6 +3,7 @@ import Database from "better-sqlite3"
 
 const app = express()
 const db = new Database("db.sqlite")
+const PORT = process.env.PORT || 3000
 
 app.use(express.json())
 app.use(express.static("public"))
@@ -70,17 +71,22 @@ app.post("/api/nickname", (req, res) => {
 })
 
 app.get("/api/posts", (req, res) => {
+  const offset = Number(req.query.offset || 0)
+
   const posts = db.prepare(`
-    SELECT p.*, 
-      IFNULL(SUM(r.value), 0) score
+    SELECT p.*,
+      IFNULL(SUM(r.value),0) score
     FROM posts p
     LEFT JOIN reactions r ON p.id = r.post_id
     GROUP BY p.id
     ORDER BY p.created_at DESC
-    LIMIT 50
-  `).all()
+    LIMIT 20 OFFSET ?
+  `).all(offset)
 
-  const comments = db.prepare("SELECT * FROM comments ORDER BY created_at ASC").all()
+  const ids = posts.map(p => p.id)
+  const comments = ids.length
+    ? db.prepare(`SELECT * FROM comments WHERE post_id IN (${ids.map(() => "?").join(",")}) ORDER BY created_at ASC`).all(...ids)
+    : []
 
   res.json({ posts, comments })
 })
@@ -90,8 +96,11 @@ app.post("/api/posts", (req, res) => {
   if (!rateLimit(nickname)) return res.sendStatus(429)
   if (!content || content.length > 200) return res.sendStatus(400)
 
-  db.prepare("INSERT INTO posts (nickname, content, created_at) VALUES (?, ?, ?)")
-    .run(nickname, content, Date.now())
+  db.prepare("INSERT INTO posts (nickname, content, created_at) VALUES (?, ?, ?)").run(
+    nickname,
+    content,
+    Date.now()
+  )
 
   res.sendStatus(200)
 })
@@ -101,11 +110,7 @@ app.post("/api/react", (req, res) => {
   if (!rateLimit(nickname)) return res.sendStatus(429)
   if (![1, -1].includes(value)) return res.sendStatus(400)
 
-  db.prepare(`
-    INSERT OR REPLACE INTO reactions (post_id, nickname, value)
-    VALUES (?, ?, ?)
-  `).run(post_id, nickname, value)
-
+  db.prepare("INSERT OR REPLACE INTO reactions VALUES (?, ?, ?)").run(post_id, nickname, value)
   res.sendStatus(200)
 })
 
@@ -114,14 +119,32 @@ app.post("/api/comments", (req, res) => {
   if (!rateLimit(nickname)) return res.sendStatus(429)
   if (!content || content.length > 100) return res.sendStatus(400)
 
-  db.prepare(`
-    INSERT INTO comments (post_id, nickname, content, created_at)
-    VALUES (?, ?, ?, ?)
-  `).run(post_id, nickname, content, Date.now())
+  db.prepare("INSERT INTO comments (post_id, nickname, content, created_at) VALUES (?, ?, ?, ?)").run(
+    post_id,
+    nickname,
+    content,
+    Date.now()
+  )
 
   res.sendStatus(200)
 })
 
+app.get("/api/profile/:nick", (req, res) => {
+  const nick = req.params.nick.toLowerCase()
+
+  const user = db.prepare("SELECT * FROM users WHERE nickname = ?").get(nick)
+  if (!user) return res.sendStatus(404)
+
+  const posts = db.prepare("SELECT COUNT(*) c FROM posts WHERE nickname = ?").get(nick).c
+  const comments = db.prepare("SELECT COUNT(*) c FROM comments WHERE nickname = ?").get(nick).c
+
+  res.json({
+    nickname: nick,
+    created_at: user.created_at,
+    posts,
+    comments
+  })
+})
+
 const PORT = process.env.PORT || 3000
 app.listen(PORT)
-
