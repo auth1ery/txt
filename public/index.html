@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>txt</title>
+<style>
+body {
+  font-family: system-ui, sans-serif;
+  background: #0f0f0f;
+  color: #eaeaea;
+  margin: 0;
+  padding: 1rem;
+}
+#app {
+  max-width: 600px;
+  margin: auto;
+}
+textarea, input {
+  width: 100%;
+  background: #111;
+  color: #fff;
+  border: 1px solid #222;
+  padding: 0.5rem;
+}
+button {
+  background: none;
+  border: none;
+  color: #888;
+}
+.post {
+  border-bottom: 1px solid #222;
+  padding: 0.75rem 0;
+}
+.meta {
+  font-size: 0.8rem;
+  color: #777;
+}
+.comment {
+  font-size: 0.85rem;
+  margin-left: 1rem;
+  color: #bbb;
+}
+</style>
+</head>
+<body>
+<div id="app">
+<h2>txt</h2>
+<textarea id="postInput" maxlength="200" placeholder="write something"></textarea>
+<button onclick="post()">post</button>
+<div id="posts"></div>
+</div>
+
+<script>
+let nickname = localStorage.getItem("nickname")
+
+async function pickName() {
+  while (!nickname) {
+    const name = prompt("pick a nickname (max 15 chars)")
+    if (!name) continue
+    const res = await fetch("/api/nickname", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ nickname: name })
+    })
+    if (res.status === 200) {
+      nickname = name.toLowerCase()
+      localStorage.setItem("nickname", nickname)
+    }
+  }
+}
+
+async function load() {
+  const res = await fetch("/api/posts")
+  const data = await res.json()
+  const el = document.getElementById("posts")
+  el.innerHTML = ""
+
+  data.posts.forEach(p => {
+    const div = document.createElement("div")
+    div.className = "post"
+    div.innerHTML = `
+      <div>${p.content}</div>
+      <div class="meta">@${p.nickname} · ${p.score}
+        <button onclick="react(${p.id},1)">+</button>
+        <button onclick="react(${p.id},-1)">-</button>
+      </div>
+      <input maxlength="100" placeholder="comment" onkeydown="if(event.key==='Enter') comment(${p.id}, this)">
+    `
+    data.comments.filter(c => c.post_id === p.id).forEach(c => {
+      const cd = document.createElement("div")
+      cd.className = "comment"
+      cd.textContent = `@${c.nickname}: ${c.content}`
+      div.appendChild(cd)
+    })
+    el.appendChild(div)
+  })
+}
+
+async function post() {
+  const input = document.getElementById("postInput")
+  await fetch("/api/posts", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname, content: input.value })
+  })
+  input.value = ""
+  load()
+}
+
+async function react(id, value) {
+  await fetch("/api/react", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname, post_id: id, value })
+  })
+  load()
+}
+
+async function comment(id, el) {
+  await fetch("/api/comments", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ nickname, post_id: id, content: el.value })
+  })
+  el.value = ""
+  load()
+}
+
+pickName().then(load)
+</script>
+</body>
+</html>
