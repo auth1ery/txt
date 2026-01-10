@@ -8,7 +8,7 @@ const __dirname = path.dirname(__filename)
 const app = express()
 const PORT = process.env.PORT || 3000
 
-// PostgreSQL connection
+// postgreSQL connection
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL || "postgresql://txtdb_user:bP3oBj1SyWA63PDPHDXh6pSHqHZcuISz@dpg-d5hdsnshg0os73fuari0-a/txtdb",
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
@@ -17,7 +17,7 @@ const pool = new pg.Pool({
 app.use(express.json())
 app.use(express.static("public"))
 
-// Initialize database tables
+// initialize database tables
 async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
