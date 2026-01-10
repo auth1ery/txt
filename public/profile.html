@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>profile</title>
+<style>
+:root{--bg:#0f0f0f;--fg:#eaeaea;--sub:#777;--border:#222}
+.light{--bg:#fff;--fg:#000;--sub:#555;--border:#ddd}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+#app{max-width:600px;margin:auto;padding:1rem}
+button{background:none;border:none;color:var(--sub)}
+</style>
+</head>
+<body>
+<div id="app">
+<h2 id="name"></h2>
+<p id="join"></p>
+<p id="counts"></p>
+<button onclick="history.back()">back</button>
+<button onclick="toggleTheme()">theme</button>
+</div>
+<script>
+function toggleTheme(){document.body.classList.toggle("light");localStorage.setItem("theme",document.body.classList.contains("light"))}
+if(localStorage.getItem("theme")==="true")document.body.classList.add("light")
+const nick=location.pathname.split("/@/")[1]
+fetch("/api/profile/"+nick).then(r=>r.json()).then(d=>{
+  document.getElementById("name").textContent="@"+d.nickname
+  const date=new Date(d.created_at)
+  document.getElementById("join").textContent="Joined: "+date.toDateString()
+  document.getElementById("counts").textContent=`Posts: ${d.posts} · Comments: ${d.comments}`
+})
+</script>
+</body>
+</html>
