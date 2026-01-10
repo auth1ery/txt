@@ -87,7 +87,7 @@ async function load(){
     div.dataset.postId=p.id
     div.innerHTML=`<div>${p.content}</div>
       <div class="meta">
-        <a href="/profile.html/${p.nickname}">@${p.nickname}</a>
+        <a href="/profile/${p.nickname}">@${p.nickname}</a>
         <span>${timeAgo(p.created_at)}</span>
         <span>score: <span id="score${p.id}">${p.score}</span></span>
         <button onclick="react(${p.id},1)">+</button>
