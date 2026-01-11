@@ -16,27 +16,27 @@ a:hover{color:#fff}
 </head>
 <body>
 <div id="app">
-<button onclick="location.href='/'">← back</button>
+<button onclick="location.href='/feed'">← back</button>
 <h2 id="nickname"></h2>
 <p id="join"></p>
 <p id="counts"></p>
 </div>
 <script>
-const nick = location.pathname.split("/profile/")[1]
-if (nick) {
+const nick=location.pathname.split("/profile/")[1]
+if(nick){
   fetch("/api/profile/"+nick)
-    .then(r => {
-      if (!r.ok) throw new Error('profile not found')
+    .then(r=>{
+      if(!r.ok) throw new Error('profile not found')
       return r.json()
     })
-    .then(d => {
-      document.getElementById("nickname").textContent = "@"+d.nickname
-      const date = new Date(d.created_at)
-      document.getElementById("join").textContent = "joined: "+date.toDateString()
-      document.getElementById("counts").textContent = `posts: ${d.posts} · comments: ${d.comments}`
+    .then(d=>{
+      document.getElementById("nickname").textContent="@"+d.nickname
+      const date=new Date(d.created_at)
+      document.getElementById("join").textContent="joined: "+date.toDateString()
+      document.getElementById("counts").textContent=`posts: ${d.posts} · comments: ${d.comments}`
     })
-    .catch(err => {
-      document.getElementById("nickname").textContent = "profile not found"
+    .catch(err=>{
+      document.getElementById("nickname").textContent="erm... you sure they exist?"
     })
 }
 </script>
