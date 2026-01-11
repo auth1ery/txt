@@ -41,6 +41,7 @@ select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font
 <button class="tab active" onclick="showTab('reports')">Reports</button>
 <button class="tab" onclick="showTab('posts')">All Posts</button>
 <button class="tab" onclick="showTab('users')">All Users</button>
+<button class="tab" onclick="showTab('bans')">Banned Users</button>
 </div>
 
 <div id="reports-tab" class="tab-content active">
@@ -61,6 +62,13 @@ select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font
 <div class="section">
 <h2>All Users</h2>
 <div id="users-list"></div>
+</div>
+</div>
+
+<div id="bans-tab" class="tab-content">
+<div class="section">
+<h2>Banned Users</h2>
+<div id="bans-list"></div>
 </div>
 </div>
 
@@ -96,6 +104,7 @@ function showTab(tab) {
   if (tab === 'reports') loadReports()
   if (tab === 'posts') loadPosts()
   if (tab === 'users') loadUsers()
+  if (tab === 'bans') loadBans()
 }
 
 async function loadReports() {
@@ -150,6 +159,7 @@ async function loadUsers() {
       <div><strong>${user.nickname}</strong></div>
       <div class="small">Joined: ${new Date(user.created_at).toLocaleString()}</div>
       <button onclick="banUser('${user.nickname}')">Ban</button>
+      <button onclick="deleteAccount('${user.nickname}')" style="color:#c44">Delete Account</button>
     </div>
   `).join('')
 }
@@ -192,6 +202,55 @@ async function resolveReport(id) {
     body: JSON.stringify({id})
   })
   loadReports()
+}
+
+async function deleteAccount(nickname) {
+  if (!confirm(`Delete ${nickname}'s account permanently? This cannot be undone.`)) return
+  
+  await fetch(`/api/admin/account/${nickname}`, {method: 'DELETE'})
+  alert('Account deleted! User will be sent to hell.')
+  
+  if (currentTab === 'users') loadUsers()
+}
+
+async function loadBans() {
+  const r = await fetch('/api/admin/bans')
+  const data = await r.json()
+  const list = document.getElementById('bans-list')
+  
+  if (data.bans.length === 0) {
+    list.innerHTML = '<p class="small">No banned users</p>'
+    return
+  }
+  
+  list.innerHTML = data.bans.map(ban => {
+    const timeLeft = ban.banned_until === -1 ? 'Permanent' : 
+      new Date(ban.banned_until) < Date.now() ? 'Expired' :
+      Math.ceil((ban.banned_until - Date.now()) / 1000 / 60 / 60 / 24) + ' days left'
+    
+    return `
+      <div class="user">
+        <div><strong>${ban.nickname}</strong></div>
+        <div><strong>Reason:</strong> ${ban.reason}</div>
+        <div class="small">Banned: ${new Date(ban.banned_at).toLocaleString()}</div>
+        <div class="small">Duration: ${timeLeft}</div>
+        <button onclick="unbanUser('${ban.nickname}')" style="color:#4c4">Unban / Appeal</button>
+      </div>
+    `
+  }).join('')
+}
+
+async function unbanUser(nickname) {
+  if (!confirm(`Unban ${nickname}? They'll be able to access the site again.`)) return
+  
+  await fetch('/api/admin/unban', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname})
+  })
+  
+  alert('User unbanned!')
+  loadBans()
 }
 </script>
 </body>
