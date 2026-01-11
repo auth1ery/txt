@@ -39,7 +39,7 @@ make 3 environmentable variables, and name each one of them:
 - DISCORD_WEBHOOK
 
 ADMIN_PASS is for the password to enter admin.html.
-DATABASE_URL is your PostgreSQL database URL.
+DATABASE_URL is your PostgreSQL database URL. YOU NEED IT!!!!!
 DISCORD_WEBHOOK is optional, but great if you want to see new posts made in real time in a Discord server.
 
 thats it!
