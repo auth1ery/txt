@@ -12,23 +12,29 @@ input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:
 button{padding:.7rem 2rem;margin:1rem 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer;font-size:1rem}
 button:hover{border-color:#eaeaea;color:#fff}
 .error{color:#c44;font-size:.85rem;margin-top:.5rem}
+.usercount{font-size:.9rem;color:#555;margin-top:2rem}
+.usercount span{color:#eaeaea;font-weight:bold}
 </style>
 </head>
 <body>
 <div id="container">
 <h1>txt</h1>
 <p>Social media is tiring and annoying, aint it? It sells your data like free lemonade, gives you ads like ads on a newspaper, and desperately tries to get you addicted. We believe social media CAN be more than that!</p>
-<p>On txt, literally all of that is gone. Place your thoughts here, argue in the comments (don't do that) and read other people's thoughts and such! <small>We also have a strict no-AI policy, so no more robots in your feed!</small></p>
+<p>On txt, literally all of that is gone. Place your thoughts here, argue in the comments (don't do that) and read other people's thoughts and such! We also have a strict no-AI policy, so no more robots in your feed!</p>
 <p>It's minimal, loads on all browsers as easy as pie... dude just go make an account already!!!!!!!!!</p>
 <input id="nickinput" maxlength="15" placeholder="your nickname">
 <div class="error" id="error"></div>
 <button onclick="register()">ENTER!!!!!!!!!!!</button>
+<div class="usercount"><span id="count">...</span> users already here</div>
 </div>
-
 <script>
 if(localStorage.getItem("nickname")){
   location.href="/feed"
 }
+
+fetch("/api/usercount").then(r=>r.json()).then(d=>{
+  document.getElementById("count").textContent=d.count
+})
 
 async function register(){
   const nick=document.getElementById("nickinput").value.trim().toLowerCase()
@@ -51,7 +57,6 @@ async function register(){
     err.textContent="something went wrong"
   }
 }
-
 document.getElementById("nickinput").addEventListener("keypress",e=>{
   if(e.key==="Enter") register()
 })
