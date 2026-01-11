@@ -56,7 +56,15 @@ async function checkBan(){
   }
 }
 
+async function checkAccountExists(){
+  const r = await fetch('/api/profile/' + nickname)
+  if(r.status === 404){
+    location.href = '/hell'
+  }
+}
+
 checkBan()
+checkAccountExists()
 
 function timeago(t){
   const s=Math.floor((Date.now()-t)/1000)
