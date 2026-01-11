@@ -6,23 +6,68 @@
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
-h2{margin-bottom:.2rem}
+h2{margin-bottom:.2rem;display:inline-block}
 p{margin:.2rem 0;font-size:0.9rem;color:#aaa}
 button{padding:.4rem .8rem;margin:.5rem 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
 a{color:#aaa;text-decoration:none}
 a:hover{color:#fff}
+.menu{position:relative;display:inline-block;margin-left:1rem}
+.dots{background:none;border:none;color:#aaa;font-size:1.5rem;cursor:pointer;padding:0 .5rem}
+.dots:hover{color:#fff}
+.dropdown{display:none;position:absolute;background:#111;border:1px solid #333;border-radius:.25rem;padding:.5rem;min-width:150px;right:0;z-index:10}
+.dropdown.show{display:block}
+.dropdown button{display:block;width:100%;text-align:left;margin:.2rem 0}
 </style>
 </head>
 <body>
 <div id="app">
 <button onclick="location.href='/feed'">← back</button>
+<div>
 <h2 id="nickname"></h2>
+<div class="menu">
+<button class="dots" onclick="toggleMenu()">⋯</button>
+<div id="menu" class="dropdown">
+<button onclick="reportUser()">Report User</button>
+</div>
+</div>
+</div>
 <p id="join"></p>
 <p id="counts"></p>
 </div>
 <script>
 const nick=location.pathname.split("/profile/")[1]
+const currentUser=localStorage.getItem("nickname")
+
+function toggleMenu(){
+  document.getElementById("menu").classList.toggle("show")
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.menu')) {
+    document.getElementById("menu").classList.remove("show")
+  }
+})
+
+async function reportUser(){
+  const reason = prompt("What's the reason for reporting this user?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: currentUser,
+      type: 'user',
+      target_user: nick,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu()
+}
+
 if(nick){
   fetch("/api/profile/"+nick)
     .then(r=>{
