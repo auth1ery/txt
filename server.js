@@ -11,10 +11,7 @@ const PORT = process.env.PORT || 3000
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 5,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 })
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
@@ -159,7 +156,6 @@ app.get("/api/posts", async (req, res) => {
       LEFT JOIN reactions r ON p.id = r.post_id
       GROUP BY p.id
       ORDER BY p.created_at DESC
-      LIMIT 200
     `)
     postCache.data = result.rows
     postCache.timestamp = now
@@ -351,6 +347,24 @@ app.delete("/api/admin/post/:id", async (req, res) => {
   await pool.query("DELETE FROM reactions WHERE post_id = $1", [id])
   await pool.query("DELETE FROM posts WHERE id = $1", [id])
   res.sendStatus(200)
+})
+
+app.delete("/api/admin/account/:nick", async (req, res) => {
+  const nick = req.params.nick.toLowerCase()
+  try {
+    await pool.query("DELETE FROM reactions WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM comments WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM posts WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
+    res.sendStatus(200)
+  } catch (error) {
+    console.error(error)
+    res.sendStatus(500)
+  }
+})
+
+app.get("/hell", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "hell.html"))
 })
 
 app.listen(PORT, () => {
