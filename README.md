@@ -1,4 +1,4 @@
-txt
+### txt - some like social media thing
 
 simple and lightweight social media designed for anyone and any browser
 
