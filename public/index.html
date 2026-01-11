@@ -6,7 +6,7 @@
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
-textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0}
+textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
 button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
 .post{border-bottom:1px solid #222;padding:.5rem 0}
@@ -18,33 +18,27 @@ button:hover{border-color:#eaeaea;color:#fff}
 a{color:#777;text-decoration:none}
 a:hover{color:#fff}
 #more,#refresh{display:block;margin:.5rem 0}
-#counter{
-  position: fixed;
-  bottom:5px;
-  left:50%;
-  transform:translateX(-50%);
-  font-size:0.7rem;
-  color:rgba(255,255,255,0.3);
-  text-transform: lowercase;
-  z-index:999;
-}
 </style>
 </head>
 <body>
 <div id="app">
 <h2>txt</h2>
-<textarea id="postInput" maxlength="200" placeholder="write"></textarea>
-<button onclick="createPost()">post</button>
+<textarea id="postinput" maxlength="200" placeholder="write"></textarea>
+<button onclick="createpost()">post</button>
+<button onclick="deleteaccount()" style="float:right;color:#c44">delete account</button>
 <div id="posts"></div>
 <button id="more" onclick="load()">more posts</button>
 <button id="refresh" onclick="location.reload()">refresh</button>
 </div>
-<div id="counter"></div>
 
 <script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
 let nickname=localStorage.getItem("nickname"),offset=0
 
-function timeAgo(t){
+function timeago(t){
   const s=Math.floor((Date.now()-t)/1000)
   if(s<60) return s+"s ago"
   const m=Math.floor(s/60)
@@ -56,24 +50,15 @@ function timeAgo(t){
   return Math.floor(d/7)+"w ago"
 }
 
-async function pickName(){
-  while(!nickname){
-    const n=prompt("nickname (15 max)")
-    if(!n) continue
-    const r=await fetch("/api/nickname",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname:n})})
-    if(r.status===200){nickname=n.toLowerCase();localStorage.setItem("nickname",nickname)}
-  }
-}
-
-function createCommentDiv(c){
-  const div = document.createElement("div")
-  div.className = "comment"
-  div.innerHTML = `<span>@${c.nickname}: ${c.content} · ${timeAgo(c.created_at)}</span>
-                   <button onclick="showReply(${c.id},${c.post_id})">reply</button>
-                   <div class="reply-box hidden" id="reply${c.id}">
-                     <input maxlength="100" placeholder="reply">
-                     <button onclick="sendReply(${c.post_id},${c.id})">send</button>
-                   </div>`
+function createcommentdiv(c){
+  const div=document.createElement("div")
+  div.className="comment"
+  div.innerHTML=`<span>@${c.nickname}: ${c.content} · ${timeago(c.created_at)}</span>
+                 <button onclick="showreply(${c.id},${c.post_id})">reply</button>
+                 <div class="reply-box hidden" id="reply${c.id}">
+                   <input maxlength="100" placeholder="reply">
+                   <button onclick="sendreply(${c.post_id},${c.id})">send</button>
+                 </div>`
   return div
 }
 
@@ -88,34 +73,33 @@ async function load(){
     div.innerHTML=`<div>${p.content}</div>
       <div class="meta">
         <a href="/profile/${p.nickname}">@${p.nickname}</a>
-        <span>${timeAgo(p.created_at)}</span>
+        <span>${timeago(p.created_at)}</span>
         <span>score: <span id="score${p.id}">${p.score}</span></span>
         <button onclick="react(${p.id},1)">+</button>
         <button onclick="react(${p.id},-1)">-</button>
-        <button onclick="toggleComments(${p.id})">comments</button>
+        <button onclick="togglecomments(${p.id})">comments</button>
       </div>
       <div id="comments${p.id}" class="hidden"></div>
       <div class="reply-box hidden" id="newcomment${p.id}">
         <input maxlength="100" placeholder="comment">
-        <button onclick="sendComment(${p.id})">send</button>
+        <button onclick="sendcomment(${p.id})">send</button>
       </div>`
-    // append comments
-    const commentsDiv = div.querySelector("#comments"+p.id)
-    d.comments.filter(c=>c.post_id===p.id && !c.parent_id).forEach(c=>{
-      commentsDiv.appendChild(createCommentDiv(c))
+    const commentsdiv=div.querySelector("#comments"+p.id)
+    d.comments.filter(c=>c.post_id===p.id&&!c.parent_id).forEach(c=>{
+      commentsdiv.appendChild(createcommentdiv(c))
     })
     el.appendChild(div)
   })
   offset+=20
 }
 
-function toggleComments(id){
+function togglecomments(id){
   document.getElementById("comments"+id).classList.toggle("hidden")
   document.getElementById("newcomment"+id).classList.toggle("hidden")
 }
 
-async function createPost(){
-  const i=document.getElementById("postInput")
+async function createpost(){
+  const i=document.getElementById("postinput")
   if(!i.value.trim()) return
   const r=await fetch("/api/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,content:i.value})})
   const data=await r.json()
@@ -131,33 +115,45 @@ async function react(id,v){
   document.getElementById("score"+id).textContent=data.score
 }
 
-async function sendComment(post_id){
-  const input = document.querySelector(`#newcomment${post_id} input`)
+async function sendcomment(post_id){
+  const input=document.querySelector(`#newcomment${post_id} input`)
   if(!input.value.trim()) return
   const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id,content:input.value})})
   input.value=""
   const data=await r.json()
-  const div = createCommentDiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
+  const div=createcommentdiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
   document.getElementById("comments"+post_id).appendChild(div)
   document.getElementById("comments"+post_id).classList.remove("hidden")
 }
 
-function showReply(comment_id,post_id){
+function showreply(comment_id,post_id){
   document.getElementById("reply"+comment_id).classList.toggle("hidden")
 }
 
-async function sendReply(post_id,parent_id){
-  const input = document.querySelector(`#reply${parent_id} input`)
+async function sendreply(post_id,parent_id){
+  const input=document.querySelector(`#reply${parent_id} input`)
   if(!input.value.trim()) return
   const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id,content:input.value,parent_id})})
   const data=await r.json()
-  const div = createCommentDiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
+  const div=createcommentdiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
   document.querySelector(`#comments${post_id}`).appendChild(div)
   input.value=""
   document.querySelector(`#comments${post_id}`).classList.remove("hidden")
 }
 
-pickName().then(load)
+async function deleteaccount(){
+  if(!confirm("delete your account? this will remove all your posts, comments, and reactions. this cannot be undone.")) return
+  const r=await fetch("/api/account/"+nickname,{method:"DELETE"})
+  if(r.status===200){
+    localStorage.removeItem("nickname")
+    alert("account deleted")
+    location.href="/"
+  }else{
+    alert("error deleting account")
+  }
+}
+
+load()
 </script>
 </body>
 </html>
