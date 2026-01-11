@@ -31,4 +31,15 @@ after when you install the requirements, you can just run:
 
 ```npm start```
 
+HOWEVER if you want to have the full features of txt:
+
+make 3 environmentable variables, and name each one of them:
+- ADMIN_PASS
+- DATABASE_URL
+- DISCORD_WEBHOOK
+
+ADMIN_PASS is for the password to enter admin.html.
+DATABASE_URL is your PostgreSQL database URL.
+DISCORD_WEBHOOK is optional, but great if you want to see new posts made in real time in a Discord server.
+
 thats it!
