@@ -9,11 +9,19 @@ const app = express()
 const PORT = process.env.PORT || 3000
 
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL || "postgresql://txtdb_user:bP3oBj1SyWA63PDPHDXh6pSHqHZcuISz@dpg-d5hdsnshg0os73fuari0-a/txtdb",
+  connectionString: process.env.DATABASE_URL,
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 })
 
 app.use(express.json())
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "landing.html"))
+})
+
+app.get("/feed", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"))
+})
 
 app.get("/profile/:nick", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "profile.html"))
@@ -153,10 +161,22 @@ app.get("/api/profile/:nick", async (req, res) => {
   })
 })
 
-app.get("/profile/:nick", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "profile.html"))
+app.delete("/api/account/:nick", async (req, res) => {
+  const nick = req.params.nick.toLowerCase()
+  
+  try {
+    await pool.query("DELETE FROM reactions WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM comments WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM posts WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
+    
+    res.sendStatus(200)
+  } catch (error) {
+    console.error(error)
+    res.sendStatus(500)
+  }
 })
 
 app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`)
+  console.log(`server running on port ${PORT}`)
 })
