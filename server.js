@@ -129,7 +129,7 @@ app.post("/api/posts", async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: `**New post created:**\n\n${content}\n\n*— ${nickname}*`
+          content: `**new post created:**\n\n${content}\nuser: ${nickname}`
         })
       })
     } catch (error) {
