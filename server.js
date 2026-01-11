@@ -3,6 +3,9 @@ import pg from "pg"
 import path from "path"
 import { fileURLToPath } from "url"
 import { containsProfanity } from "./filter.js"
+import bcrypt from "bcrypt"
+import rateLimit from "express-rate-limit"
+import sanitizeHtml from "sanitize-html"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -11,13 +14,35 @@ const PORT = process.env.PORT || 3000
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 })
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
-const ADMIN_PASS = process.env.ADMIN_PASS
+const ADMIN_PASS_HASH = process.env.ADMIN_PASS_HASH
+
+const generalLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: { error: "Too many requests, slow down!" }
+})
+
+const postLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 5,
+  message: { error: "Too many posts, wait a minute!" }
+})
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: "Too many login attempts, try again later" }
+})
 
 app.use(express.json())
+app.use('/api/', generalLimiter)
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "landing.html"))
@@ -45,6 +70,10 @@ app.get("/admin", (req, res) => {
 
 app.get("/banned", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "banned.html"))
+})
+
+app.get("/hell", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "hell.html"))
 })
 
 app.use(express.static("public"))
@@ -127,6 +156,9 @@ app.post("/api/check-ban", async (req, res) => {
 app.post("/api/nickname", async (req, res) => {
   const nickname = req.body.nickname?.trim().toLowerCase()
   if (!nickname || nickname.length > 15) return res.sendStatus(400)
+  
+  const sanitized = sanitizeHtml(nickname, { allowedTags: [], allowedAttributes: {} })
+  if (sanitized !== nickname) return res.sendStatus(400)
   if (containsProfanity(nickname)) return res.sendStatus(400)
   
   const ban = await checkBan(nickname)
@@ -156,6 +188,7 @@ app.get("/api/posts", async (req, res) => {
       LEFT JOIN reactions r ON p.id = r.post_id
       GROUP BY p.id
       ORDER BY p.created_at DESC
+      LIMIT 200
     `)
     postCache.data = result.rows
     postCache.timestamp = now
@@ -177,17 +210,19 @@ app.get("/api/posts", async (req, res) => {
   res.json({ posts, comments })
 })
 
-app.post("/api/posts", async (req, res) => {
+app.post("/api/posts", postLimiter, async (req, res) => {
   const { nickname, content } = req.body
   if (!content || content.length > 200) return res.sendStatus(400)
-  if (containsProfanity(content)) return res.sendStatus(400)
+  
+  const sanitized = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} })
+  if (containsProfanity(sanitized)) return res.sendStatus(400)
   
   const ban = await checkBan(nickname)
   if (ban) return res.status(403).json({ banned: true })
   
   const result = await pool.query(
     "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
-    [nickname, content, Date.now()]
+    [nickname, sanitized, Date.now()]
   )
   
   if (DISCORD_WEBHOOK) {
@@ -198,7 +233,7 @@ app.post("/api/posts", async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: `**new post created:**\n\ncontent: ${content}\nuploader: ${nickname}\nview on: https://txt-ctgm.onrender.com/`
+          content: `**new post created:**\n\ncontent: ${sanitized}\nuploader: ${nickname}\nview on: https://txt-ctgm.onrender.com/`
         })
       })
     } catch (error) {
@@ -229,17 +264,19 @@ app.post("/api/react", async (req, res) => {
   res.json({ score: result.rows[0].c })
 })
 
-app.post("/api/comments", async (req, res) => {
+app.post("/api/comments", postLimiter, async (req, res) => {
   const { nickname, post_id, content, parent_id } = req.body
   if (!content || content.length > 100) return res.sendStatus(400)
-  if (containsProfanity(content)) return res.sendStatus(400)
+  
+  const sanitized = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} })
+  if (containsProfanity(sanitized)) return res.sendStatus(400)
   
   const ban = await checkBan(nickname)
   if (ban) return res.status(403).json({ banned: true })
   
   const result = await pool.query(
     "INSERT INTO comments(post_id, parent_id, nickname, content, created_at) VALUES($1, $2, $3, $4, $5) RETURNING id",
-    [post_id, parent_id || null, nickname, content, Date.now()]
+    [post_id, parent_id || null, nickname, sanitized, Date.now()]
   )
   res.json({ id: result.rows[0].id })
 })
@@ -281,19 +318,22 @@ app.post("/api/report", async (req, res) => {
   const { reporter, type, target_user, target_post, reason } = req.body
   if (!reason || reason.length > 500) return res.sendStatus(400)
   
+  const sanitized = sanitizeHtml(reason, { allowedTags: [], allowedAttributes: {} })
+  
   await pool.query(
     "INSERT INTO reports(reporter, type, target_user, target_post, reason, created_at) VALUES($1, $2, $3, $4, $5, $6)",
-    [reporter, type, target_user || null, target_post || null, reason, Date.now()]
+    [reporter, type, target_user || null, target_post || null, sanitized, Date.now()]
   )
   
   res.sendStatus(200)
 })
 
-app.post("/api/admin/verify", async (req, res) => {
+app.post("/api/admin/verify", authLimiter, async (req, res) => {
   const { password } = req.body
-  if (password === ADMIN_PASS) {
-    res.json({ valid: true })
-  } else {
+  try {
+    const isValid = await bcrypt.compare(password, ADMIN_PASS_HASH)
+    res.json({ valid: isValid })
+  } catch (error) {
     res.json({ valid: false })
   }
 })
@@ -376,10 +416,6 @@ app.delete("/api/admin/account/:nick", async (req, res) => {
     console.error(error)
     res.sendStatus(500)
   }
-})
-
-app.get("/hell", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "hell.html"))
 })
 
 app.listen(PORT, () => {
