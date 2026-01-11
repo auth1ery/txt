@@ -30,6 +30,14 @@ app.get("/profile/:nick", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "profile.html"))
 })
 
+app.get("/terms", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "terms.html"))
+})
+
+app.get("/privacy", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "privacy.html"))
+})
+
 app.use(express.static("public"))
 
 async function initDB() {
