@@ -1,1 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Admin Dashboard</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;padding:2rem}
+#login{max-width:400px;margin:5rem auto;text-align:center}
+#dashboard{max-width:1200px;margin:0 auto;display:none}
+h1{font-size:2rem;margin:0 0 2rem 0}
+input,textarea{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.7rem;margin:.5rem 0;font-size:1rem;box-sizing:border-box}
+button{padding:.7rem 1.5rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer;font-size:1rem;margin:.5rem}
+button:hover{border-color:#eaeaea;color:#fff}
+.section{background:#111;border:1px solid #222;border-radius:.5rem;padding:1.5rem;margin:2rem 0}
+.report,.post,.user{background:#0a0a0a;border:1px solid #222;padding:1rem;margin:1rem 0;border-radius:.25rem}
+.report-actions{margin-top:1rem}
+select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font-size:1rem}
+.error{color:#c44;margin:.5rem 0}
+.success{color:#4c4;margin:.5rem 0}
+.small{font-size:.85rem;color:#777}
+.tabs{display:flex;gap:1rem;margin-bottom:2rem}
+.tab{padding:.7rem 1.5rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+.tab.active{border-color:#eaeaea;color:#fff}
+.tab-content{display:none}
+.tab-content.active{display:block}
+</style>
+</head>
+<body>
 
+<div id="login">
+<h1>Admin Login</h1>
+<input type="password" id="pass" placeholder="Admin password">
+<div class="error" id="error"></div>
+<button onclick="login()">Login</button>
+</div>
+
+<div id="dashboard">
+<h1>Admin Dashboard</h1>
+
+<div class="tabs">
+<button class="tab active" onclick="showTab('reports')">Reports</button>
+<button class="tab" onclick="showTab('posts')">All Posts</button>
+<button class="tab" onclick="showTab('users')">All Users</button>
+</div>
+
+<div id="reports-tab" class="tab-content active">
+<div class="section">
+<h2>Pending Reports</h2>
+<div id="reports-list"></div>
+</div>
+</div>
+
+<div id="posts-tab" class="tab-content">
+<div class="section">
+<h2>All Posts</h2>
+<div id="posts-list"></div>
+</div>
+</div>
+
+<div id="users-tab" class="tab-content">
+<div class="section">
+<h2>All Users</h2>
+<div id="users-list"></div>
+</div>
+</div>
+
+</div>
+
+<script>
+let currentTab = 'reports'
+
+async function login() {
+  const pass = document.getElementById('pass').value
+  const r = await fetch('/api/admin/verify', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({password: pass})
+  })
+  const data = await r.json()
+  if (data.valid) {
+    document.getElementById('login').style.display = 'none'
+    document.getElementById('dashboard').style.display = 'block'
+    loadReports()
+  } else {
+    document.getElementById('error').textContent = 'Invalid password'
+  }
+}
+
+function showTab(tab) {
+  currentTab = tab
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'))
+  event.target.classList.add('active')
+  document.getElementById(tab + '-tab').classList.add('active')
+  
+  if (tab === 'reports') loadReports()
+  if (tab === 'posts') loadPosts()
+  if (tab === 'users') loadUsers()
+}
+
+async function loadReports() {
+  const r = await fetch('/api/admin/reports')
+  const data = await r.json()
+  const list = document.getElementById('reports-list')
+  
+  if (data.reports.length === 0) {
+    list.innerHTML = '<p class="small">No reports found</p>'
+    return
+  }
+  
+  list.innerHTML = data.reports.map(rep => `
+    <div class="report">
+      <div><strong>Type:</strong> ${rep.type}</div>
+      <div><strong>Reporter:</strong> ${rep.reporter}</div>
+      ${rep.target_user ? `<div><strong>Reported User:</strong> ${rep.target_user}</div>` : ''}
+      ${rep.target_post ? `<div><strong>Post ID:</strong> ${rep.target_post}</div>` : ''}
+      <div><strong>Reason:</strong> ${rep.reason}</div>
+      <div class="small">Reported: ${new Date(rep.created_at).toLocaleString()}</div>
+      <div class="report-actions">
+        <button onclick="banUser('${rep.target_user || rep.reporter}', ${rep.id})">Ban User</button>
+        ${rep.target_post ? `<button onclick="deletePost(${rep.target_post}, ${rep.id})">Delete Post</button>` : ''}
+        <button onclick="resolveReport(${rep.id})">Mark Resolved</button>
+      </div>
+    </div>
+  `).join('')
+}
+
+async function loadPosts() {
+  const r = await fetch('/api/admin/posts')
+  const data = await r.json()
+  const list = document.getElementById('posts-list')
+  
+  list.innerHTML = data.posts.slice(0, 50).map(post => `
+    <div class="post">
+      <div><strong>ID:</strong> ${post.id} | <strong>User:</strong> ${post.nickname}</div>
+      <div>${post.content}</div>
+      <div class="small">${new Date(post.created_at).toLocaleString()}</div>
+      <button onclick="deletePost(${post.id})">Delete</button>
+    </div>
+  `).join('')
+}
+
+async function loadUsers() {
+  const r = await fetch('/api/admin/users')
+  const data = await r.json()
+  const list = document.getElementById('users-list')
+  
+  list.innerHTML = data.users.map(user => `
+    <div class="user">
+      <div><strong>${user.nickname}</strong></div>
+      <div class="small">Joined: ${new Date(user.created_at).toLocaleString()}</div>
+      <button onclick="banUser('${user.nickname}')">Ban</button>
+    </div>
+  `).join('')
+}
+
+async function banUser(nickname, reportId) {
+  const duration = prompt('Ban duration:\n1 - 1 day\n7 - 7 days\n30 - 30 days\n365 - 1 year\ninfinite - Permanent')
+  if (!duration) return
+  
+  const reason = prompt('Ban reason:')
+  if (!reason) return
+  
+  if (!confirm(`Ban ${nickname} for ${duration === 'infinite' ? 'forever' : duration + ' days'}?`)) return
+  
+  await fetch('/api/admin/ban', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname, reason, duration})
+  })
+  
+  alert('User banned!')
+  if (reportId) await resolveReport(reportId)
+  loadReports()
+}
+
+async function deletePost(postId, reportId) {
+  if (!confirm('Delete this post?')) return
+  
+  await fetch(`/api/admin/post/${postId}`, {method: 'DELETE'})
+  alert('Post deleted!')
+  
+  if (reportId) await resolveReport(reportId)
+  if (currentTab === 'reports') loadReports()
+  if (currentTab === 'posts') loadPosts()
+}
+
+async function resolveReport(id) {
+  await fetch('/api/admin/resolve-report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({id})
+  })
+  loadReports()
+}
+</script>
+</body>
+</html>
