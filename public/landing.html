@@ -14,6 +14,9 @@ button:hover{border-color:#eaeaea;color:#fff}
 .error{color:#c44;font-size:.85rem;margin-top:.5rem}
 .usercount{font-size:.9rem;color:#555;margin-top:2rem}
 .usercount span{color:#eaeaea;font-weight:bold}
+.legal{font-size:.75rem;color:#555;margin:.5rem 0}
+.legal a{color:#777;text-decoration:none}
+.legal a:hover{color:#eaeaea}
 </style>
 </head>
 <body>
@@ -24,6 +27,7 @@ button:hover{border-color:#eaeaea;color:#fff}
 <p>It's minimal, loads on all browsers as easy as pie... dude just go make an account already!!!!!!!!!</p>
 <input id="nickinput" maxlength="15" placeholder="your nickname">
 <div class="error" id="error"></div>
+<div class="legal">By entering, you agree to our <a href="/privacy">Privacy Policy</a> and <a href="/terms">Terms of Service</a>.</div>
 <button onclick="register()">ENTER!!!!!!!!!!!</button>
 <div class="usercount"><span id="count">...</span> users already here</div>
 </div>
@@ -31,11 +35,9 @@ button:hover{border-color:#eaeaea;color:#fff}
 if(localStorage.getItem("nickname")){
   location.href="/feed"
 }
-
 fetch("/api/usercount").then(r=>r.json()).then(d=>{
   document.getElementById("count").textContent=d.count
 })
-
 async function register(){
   const nick=document.getElementById("nickinput").value.trim().toLowerCase()
   const err=document.getElementById("error")
