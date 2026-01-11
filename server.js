@@ -2,6 +2,7 @@ import express from "express"
 import pg from "pg"
 import path from "path"
 import { fileURLToPath } from "url"
+import { containsProfanity } from "./filter.js"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -67,6 +68,7 @@ const postCache = { data: [], timestamp: 0 }
 app.post("/api/nickname", async (req, res) => {
   const nickname = req.body.nickname?.trim().toLowerCase()
   if (!nickname || nickname.length > 15) return res.sendStatus(400)
+  if (containsProfanity(nickname)) return res.sendStatus(400)
   try {
     await pool.query("INSERT INTO users VALUES ($1, $2)", [nickname, Date.now()])
     res.sendStatus(200)
@@ -115,6 +117,7 @@ app.get("/api/posts", async (req, res) => {
 app.post("/api/posts", async (req, res) => {
   const { nickname, content } = req.body
   if (!content || content.length > 200) return res.sendStatus(400)
+  if (containsProfanity(content)) return res.sendStatus(400)
   
   const result = await pool.query(
     "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
@@ -160,6 +163,7 @@ app.post("/api/react", async (req, res) => {
 app.post("/api/comments", async (req, res) => {
   const { nickname, post_id, content, parent_id } = req.body
   if (!content || content.length > 100) return res.sendStatus(400)
+  if (containsProfanity(content)) return res.sendStatus(400)
   
   const result = await pool.query(
     "INSERT INTO comments(post_id, parent_id, nickname, content, created_at) VALUES($1, $2, $3, $4, $5) RETURNING id",
