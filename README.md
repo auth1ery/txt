@@ -1,5 +1,11 @@
 ### txt - some like social media thing
 
+![status](https://img.shields.io/badge/status-active-success)
+![license](https://img.shields.io/badge/license-MIT-blue)
+![github stars](https://img.shields.io/github/stars/auth1ery/txt?style=social)
+![github forks](https://img.shields.io/github/forks/auth1ery/txt?style=social)
+![made with love](https://img.shields.io/badge/made%20with-♥-red)
+
 txt is a simple and lightweight social media designed for anyone and any browser
 
 its very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU, and RAM and possible as well as save bandwidth. 
