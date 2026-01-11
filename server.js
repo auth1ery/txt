@@ -341,6 +341,21 @@ app.post("/api/admin/resolve-report", async (req, res) => {
   res.sendStatus(200)
 })
 
+app.get("/api/admin/bans", async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM bans ORDER BY banned_at DESC"
+  )
+  res.json({ bans: result.rows })
+})
+
+app.post("/api/admin/unban", async (req, res) => {
+  const { nickname } = req.body
+  if (!nickname) return res.sendStatus(400)
+  
+  await pool.query("DELETE FROM bans WHERE nickname = $1", [nickname])
+  res.sendStatus(200)
+})
+
 app.delete("/api/admin/post/:id", async (req, res) => {
   const id = req.params.id
   await pool.query("DELETE FROM comments WHERE post_id = $1", [id])
