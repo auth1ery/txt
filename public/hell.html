@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>hell</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;display:flex;align-items:center;justify-content:center;min-height:100vh}
+#container{max-width:500px;padding:2rem;text-align:center}
+h1{font-size:4rem;margin:0;color:#c44}
+p{color:#aaa;line-height:1.6;margin:1.5rem 0}
+a{color:#777;text-decoration:none;padding:.7rem 2rem;border:1px solid #555;border-radius:.25rem;display:inline-block;margin-top:1rem}
+a:hover{border-color:#eaeaea;color:#fff}
+</style>
+</head>
+<body>
+<div id="container">
+<h1>welcome to account hell</h1>
+<p>your account has been deleted by a moderator.</p>
+<p><small>probably because you did something wrong not gonna lie</small></p>
+<p>all your posts, comments, and data are gone. forever.</p>
+<p>want to start fresh?</p>
+<a href="/">make a new account</a>
+</div>
+<script>
+localStorage.removeItem('nickname')
+</script>
+</body>
+</html>
