@@ -2,7 +2,7 @@ txt
 
 simple and lightweight social media designed for anyone and any browser
 
-very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU, and RAM and possible as well as saving bandwidth. 
+very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU, and RAM and possible as well as save bandwidth. 
 
 # features
 
