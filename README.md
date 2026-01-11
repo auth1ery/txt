@@ -50,3 +50,9 @@ DATABASE_URL is your PostgreSQL database URL.
 DISCORD_WEBHOOK is optional, but great if you want to see new posts made in real time in a Discord server.   
 
 thats it!
+
+<br>
+<br>
+<p align="center">
+   ⚡
+</p>
