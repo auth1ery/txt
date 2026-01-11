@@ -4,11 +4,15 @@
   "main": "server.js",
   "type": "module",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "generate-hash": "node generate-hash.js"
   },
   "dependencies": {
     "pg": "^8.11.3",
-    "express": "^4.19.2"
+    "express": "^4.19.2",
+    "bcrypt": "^5.1.1",
+    "express-rate-limit": "^7.1.5",
+    "sanitize-html": "^2.11.0"
   },
   "license": "MIT"
 }
