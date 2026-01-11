@@ -15,6 +15,7 @@ const pool = new pg.Pool({
 })
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
+const ADMIN_PASS = process.env.ADMIN_PASS
 
 app.use(express.json())
 
@@ -36,6 +37,14 @@ app.get("/terms", (req, res) => {
 
 app.get("/privacy", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "privacy.html"))
+})
+
+app.get("/admin", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "admin.html"))
+})
+
+app.get("/banned", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "banned.html"))
 })
 
 app.use(express.static("public"))
@@ -66,6 +75,22 @@ async function initDB() {
       content TEXT,
       created_at BIGINT
     );
+    CREATE TABLE IF NOT EXISTS reports (
+      id SERIAL PRIMARY KEY,
+      reporter TEXT,
+      type TEXT,
+      target_user TEXT,
+      target_post INTEGER,
+      reason TEXT,
+      created_at BIGINT,
+      status TEXT DEFAULT 'pending'
+    );
+    CREATE TABLE IF NOT EXISTS bans (
+      nickname TEXT PRIMARY KEY,
+      reason TEXT,
+      banned_until BIGINT,
+      banned_at BIGINT
+    );
   `)
 }
 
@@ -73,10 +98,40 @@ initDB().catch(console.error)
 
 const postCache = { data: [], timestamp: 0 }
 
+async function checkBan(nickname) {
+  const result = await pool.query(
+    "SELECT * FROM bans WHERE nickname = $1",
+    [nickname]
+  )
+  if (result.rows.length === 0) return null
+  const ban = result.rows[0]
+  if (ban.banned_until !== -1 && Date.now() > ban.banned_until) {
+    await pool.query("DELETE FROM bans WHERE nickname = $1", [nickname])
+    return null
+  }
+  return ban
+}
+
+app.post("/api/check-ban", async (req, res) => {
+  const { nickname } = req.body
+  const ban = await checkBan(nickname)
+  if (ban) {
+    const timeLeft = ban.banned_until === -1 ? "forever" : 
+      Math.ceil((ban.banned_until - Date.now()) / 1000 / 60 / 60 / 24) + " days"
+    res.json({ banned: true, reason: ban.reason, timeLeft })
+  } else {
+    res.json({ banned: false })
+  }
+})
+
 app.post("/api/nickname", async (req, res) => {
   const nickname = req.body.nickname?.trim().toLowerCase()
   if (!nickname || nickname.length > 15) return res.sendStatus(400)
   if (containsProfanity(nickname)) return res.sendStatus(400)
+  
+  const ban = await checkBan(nickname)
+  if (ban) return res.status(403).json({ banned: true })
+  
   try {
     await pool.query("INSERT INTO users VALUES ($1, $2)", [nickname, Date.now()])
     res.sendStatus(200)
@@ -127,6 +182,9 @@ app.post("/api/posts", async (req, res) => {
   if (!content || content.length > 200) return res.sendStatus(400)
   if (containsProfanity(content)) return res.sendStatus(400)
   
+  const ban = await checkBan(nickname)
+  if (ban) return res.status(403).json({ banned: true })
+  
   const result = await pool.query(
     "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
     [nickname, content, Date.now()]
@@ -155,6 +213,9 @@ app.post("/api/react", async (req, res) => {
   const { nickname, post_id, value } = req.body
   if (![1, -1].includes(value)) return res.sendStatus(400)
   
+  const ban = await checkBan(nickname)
+  if (ban) return res.status(403).json({ banned: true })
+  
   await pool.query(
     `INSERT INTO reactions VALUES($1, $2, $3) 
      ON CONFLICT (post_id, nickname) DO UPDATE SET value = $3`,
@@ -172,6 +233,9 @@ app.post("/api/comments", async (req, res) => {
   const { nickname, post_id, content, parent_id } = req.body
   if (!content || content.length > 100) return res.sendStatus(400)
   if (containsProfanity(content)) return res.sendStatus(400)
+  
+  const ban = await checkBan(nickname)
+  if (ban) return res.status(403).json({ banned: true })
   
   const result = await pool.query(
     "INSERT INTO comments(post_id, parent_id, nickname, content, created_at) VALUES($1, $2, $3, $4, $5) RETURNING id",
@@ -211,6 +275,78 @@ app.delete("/api/account/:nick", async (req, res) => {
     console.error(error)
     res.sendStatus(500)
   }
+})
+
+app.post("/api/report", async (req, res) => {
+  const { reporter, type, target_user, target_post, reason } = req.body
+  if (!reason || reason.length > 500) return res.sendStatus(400)
+  
+  await pool.query(
+    "INSERT INTO reports(reporter, type, target_user, target_post, reason, created_at) VALUES($1, $2, $3, $4, $5, $6)",
+    [reporter, type, target_user || null, target_post || null, reason, Date.now()]
+  )
+  
+  res.sendStatus(200)
+})
+
+app.post("/api/admin/verify", async (req, res) => {
+  const { password } = req.body
+  if (password === ADMIN_PASS) {
+    res.json({ valid: true })
+  } else {
+    res.json({ valid: false })
+  }
+})
+
+app.get("/api/admin/reports", async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM reports WHERE status = 'pending' ORDER BY created_at DESC"
+  )
+  res.json({ reports: result.rows })
+})
+
+app.get("/api/admin/posts", async (req, res) => {
+  const result = await pool.query(
+    "SELECT * FROM posts ORDER BY created_at DESC LIMIT 100"
+  )
+  res.json({ posts: result.rows })
+})
+
+app.get("/api/admin/users", async (req, res) => {
+  const result = await pool.query("SELECT nickname, created_at FROM users ORDER BY created_at DESC")
+  res.json({ users: result.rows })
+})
+
+app.post("/api/admin/ban", async (req, res) => {
+  const { nickname, reason, duration } = req.body
+  if (!nickname || !reason) return res.sendStatus(400)
+  
+  let banned_until = -1
+  if (duration !== 'infinite') {
+    const days = parseInt(duration)
+    banned_until = Date.now() + (days * 24 * 60 * 60 * 1000)
+  }
+  
+  await pool.query(
+    "INSERT INTO bans VALUES($1, $2, $3, $4) ON CONFLICT (nickname) DO UPDATE SET reason = $2, banned_until = $3, banned_at = $4",
+    [nickname, reason, banned_until, Date.now()]
+  )
+  
+  res.sendStatus(200)
+})
+
+app.post("/api/admin/resolve-report", async (req, res) => {
+  const { id } = req.body
+  await pool.query("UPDATE reports SET status = 'resolved' WHERE id = $1", [id])
+  res.sendStatus(200)
+})
+
+app.delete("/api/admin/post/:id", async (req, res) => {
+  const id = req.params.id
+  await pool.query("DELETE FROM comments WHERE post_id = $1", [id])
+  await pool.query("DELETE FROM reactions WHERE post_id = $1", [id])
+  await pool.query("DELETE FROM posts WHERE id = $1", [id])
+  res.sendStatus(200)
 })
 
 app.listen(PORT, () => {
