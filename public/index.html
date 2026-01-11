@@ -259,6 +259,15 @@ async function createpost(){
     location.href = '/banned'
     return
   }
+  if(r.status === 429){
+    const data = await r.json()
+    alert(data.error || "Too many posts, slow down!")
+    return
+  }
+  if(!r.ok){
+    alert("Error posting. Try again.")
+    return
+  }
   const data=await r.json()
   i.value=""
   document.getElementById("posts").innerHTML=""
@@ -286,6 +295,15 @@ async function sendcomment(post_id){
     location.href = '/banned'
     return
   }
+  if(r.status === 429){
+    const data = await r.json()
+    alert(data.error || "Too many comments, slow down!")
+    return
+  }
+  if(!r.ok){
+    alert("Error commenting. Try again.")
+    return
+  }
   input.value=""
   const data=await r.json()
   const div=createcommentdiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
@@ -304,6 +322,15 @@ async function sendreply(post_id,parent_id){
   if(r.status === 403){
     alert("You're banned!")
     location.href = '/banned'
+    return
+  }
+  if(r.status === 429){
+    const data = await r.json()
+    alert(data.error || "Too many comments, slow down!")
+    return
+  }
+  if(!r.ok){
+    alert("Error replying. Try again.")
     return
   }
   const data=await r.json()
