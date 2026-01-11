@@ -28,7 +28,7 @@ a:hover{color:#fff}
 </head>
 <body>
 <div id="app">
-<h2>txt</h2>
+<h2 id="greeting"></h2>
 <textarea id="postinput" maxlength="200" placeholder="write"></textarea>
 <button onclick="createpost()">post</button>
 <button onclick="deleteaccount()" style="float:right;color:#c44">delete account</button>
@@ -43,6 +43,49 @@ if(!localStorage.getItem("nickname")){
 }
 
 let nickname=localStorage.getItem("nickname"),offset=0
+
+function getGreeting() {
+  const hour = new Date().getHours()
+  const lastGreeting = localStorage.getItem('lastGreeting')
+  const lastGreetingTime = localStorage.getItem('lastGreetingTime')
+  const now = Date.now()
+  
+  const timeGreetings = {
+    morning: `good morning, ${nickname}`,
+    evening: `good evening, ${nickname}`,
+    night: `not sleeping ${nickname}?`
+  }
+  
+  const randomGreetings = [
+    `welcome, ${nickname}`,
+    `hi ${nickname}`,
+    `scrolling now, ${nickname}?`,
+    `i like your shirt ${nickname}`
+  ]
+  
+  let greeting
+  
+  if (hour >= 5 && hour < 12) {
+    greeting = timeGreetings.morning
+  } else if (hour >= 17 && hour < 22) {
+    greeting = timeGreetings.evening
+  } else if (hour >= 22 || hour < 5) {
+    greeting = timeGreetings.night
+  } else {
+    greeting = randomGreetings[Math.floor(Math.random() * randomGreetings.length)]
+  }
+  
+  if (lastGreeting === greeting && now - lastGreetingTime < 3600000) {
+    greeting = randomGreetings[Math.floor(Math.random() * randomGreetings.length)]
+  }
+  
+  localStorage.setItem('lastGreeting', greeting)
+  localStorage.setItem('lastGreetingTime', now)
+  
+  return greeting
+}
+
+document.getElementById('greeting').textContent = getGreeting()
 
 async function checkBan(){
   const r = await fetch('/api/check-ban', {
