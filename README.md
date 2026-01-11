@@ -10,6 +10,7 @@ its very small in size of the source code, often just some kilobytes. the fronte
 - score system (upvoting and downvoting)
 - comments and replies
 - profiles
+- reporting system
 
 # install
 
