@@ -1,6 +1,6 @@
 txt
 
-simple and lightweight social media designed for anyone
+simple and lightweight social media designed for anyone and any browser
 
 # features
 
@@ -11,7 +11,7 @@ simple and lightweight social media designed for anyone
 
 # install
 
-you typlically need just
+you typlically need to just run:
 
 ```npm install```
 
@@ -20,11 +20,11 @@ this alone will install:
 - express (web framework)
 from package.json.
 
-you'll need to install node.js and postgreSQL from these websites:
+cant install from that command? then you'll need to manually install node.js and postgreSQL from these websites:
 https://nodejs.org
 https://postgresql.org
 
-after when you install the requirements, you can just run
+after when you install the requirements, you can just run:
 
 ```npm start```
 
