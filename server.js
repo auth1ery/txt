@@ -13,6 +13,8 @@ const pool = new pg.Pool({
   ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
 })
 
+const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
+
 app.use(express.json())
 
 app.get("/", (req, res) => {
@@ -118,6 +120,23 @@ app.post("/api/posts", async (req, res) => {
     "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
     [nickname, content, Date.now()]
   )
+  
+  if (DISCORD_WEBHOOK) {
+    try {
+      await fetch(DISCORD_WEBHOOK, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          content: `**New post created:**\n\n${content}\n\n*— ${nickname}*`
+        })
+      })
+    } catch (error) {
+      console.error('Failed to send Discord webhook:', error)
+    }
+  }
+  
   res.json({ id: result.rows[0].id })
 })
 
