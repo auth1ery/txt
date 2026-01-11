@@ -1,8 +1,8 @@
 ### txt - some like social media thing
 
-simple and lightweight social media designed for anyone and any browser
+txt is a simple and lightweight social media designed for anyone and any browser
 
-very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU, and RAM and possible as well as save bandwidth. 
+its very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU, and RAM and possible as well as save bandwidth. 
 
 # features
 
