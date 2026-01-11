@@ -9,7 +9,7 @@ body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
 button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
-.post{border-bottom:1px solid #222;padding:.5rem 0}
+.post{border-bottom:1px solid #222;padding:.5rem 0;position:relative}
 .meta{font-size:.8rem;color:#777;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .comment{font-size:.85rem;margin-left:1rem;color:#777;display:flex;justify-content:space-between;align-items:center}
 .comment button{padding:.2rem .4rem;font-size:.7rem}
@@ -18,6 +18,12 @@ button:hover{border-color:#eaeaea;color:#fff}
 a{color:#777;text-decoration:none}
 a:hover{color:#fff}
 #more,#refresh{display:block;margin:.5rem 0}
+.menu{position:relative;display:inline-block}
+.dots{background:none;border:none;color:#777;font-size:1.2rem;cursor:pointer;padding:0 .5rem}
+.dots:hover{color:#fff}
+.dropdown{display:none;position:absolute;background:#111;border:1px solid #333;border-radius:.25rem;padding:.5rem;min-width:180px;right:0;z-index:10}
+.dropdown.show{display:block}
+.dropdown button{display:block;width:100%;text-align:left;margin:.2rem 0;padding:.4rem}
 </style>
 </head>
 <body>
@@ -38,6 +44,20 @@ if(!localStorage.getItem("nickname")){
 
 let nickname=localStorage.getItem("nickname"),offset=0
 
+async function checkBan(){
+  const r = await fetch('/api/check-ban', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname})
+  })
+  const data = await r.json()
+  if(data.banned){
+    location.href = '/banned'
+  }
+}
+
+checkBan()
+
 function timeago(t){
   const s=Math.floor((Date.now()-t)/1000)
   if(s<60) return s+"s ago"
@@ -48,6 +68,79 @@ function timeago(t){
   const d=Math.floor(h/24)
   if(d<7) return d+"d ago"
   return Math.floor(d/7)+"w ago"
+}
+
+function toggleMenu(id){
+  const menu = document.getElementById("menu"+id)
+  document.querySelectorAll('.dropdown').forEach(d => {
+    if(d.id !== "menu"+id) d.classList.remove("show")
+  })
+  menu.classList.toggle("show")
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.menu')) {
+    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove("show"))
+  }
+})
+
+async function reportPost(postId, postUser){
+  const reason = prompt("What's the reason for reporting this post?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: nickname,
+      type: 'post',
+      target_user: postUser,
+      target_post: postId,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu(postId)
+}
+
+async function reportUser(postId, postUser){
+  const reason = prompt("What's the reason for reporting this user?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: nickname,
+      type: 'user',
+      target_user: postUser,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu(postId)
+}
+
+async function reportBoth(postId, postUser){
+  const reason = prompt("What's the reason for reporting this user and post?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: nickname,
+      type: 'both',
+      target_user: postUser,
+      target_post: postId,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu(postId)
 }
 
 function createcommentdiv(c){
@@ -78,6 +171,14 @@ async function load(){
         <button onclick="react(${p.id},1)">+</button>
         <button onclick="react(${p.id},-1)">-</button>
         <button onclick="togglecomments(${p.id})">comments</button>
+        <div class="menu">
+          <button class="dots" onclick="toggleMenu(${p.id})">⋯</button>
+          <div id="menu${p.id}" class="dropdown">
+            <button onclick="reportPost(${p.id}, '${p.nickname}')">Report Post</button>
+            <button onclick="reportUser(${p.id}, '${p.nickname}')">Report User</button>
+            <button onclick="reportBoth(${p.id}, '${p.nickname}')">Report Both</button>
+          </div>
+        </div>
       </div>
       <div id="comments${p.id}" class="hidden"></div>
       <div class="reply-box hidden" id="newcomment${p.id}">
@@ -102,6 +203,11 @@ async function createpost(){
   const i=document.getElementById("postinput")
   if(!i.value.trim()) return
   const r=await fetch("/api/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,content:i.value})})
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
   const data=await r.json()
   i.value=""
   document.getElementById("posts").innerHTML=""
@@ -111,6 +217,11 @@ async function createpost(){
 
 async function react(id,v){
   const r=await fetch("/api/react",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id:id,value:v})})
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
   const data=await r.json()
   document.getElementById("score"+id).textContent=data.score
 }
@@ -119,6 +230,11 @@ async function sendcomment(post_id){
   const input=document.querySelector(`#newcomment${post_id} input`)
   if(!input.value.trim()) return
   const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id,content:input.value})})
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
   input.value=""
   const data=await r.json()
   const div=createcommentdiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
@@ -134,6 +250,11 @@ async function sendreply(post_id,parent_id){
   const input=document.querySelector(`#reply${parent_id} input`)
   if(!input.value.trim()) return
   const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id,content:input.value,parent_id})})
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
   const data=await r.json()
   const div=createcommentdiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
   document.querySelector(`#comments${post_id}`).appendChild(div)
