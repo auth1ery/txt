@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Banned</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;display:flex;align-items:center;justify-content:center;min-height:100vh}
+#container{max-width:500px;padding:2rem;text-align:center}
+h1{font-size:3rem;margin:0;color:#c44}
+p{color:#aaa;line-height:1.6;margin:1.5rem 0}
+.reason{background:#1a0000;border:1px solid #440000;padding:1rem;border-radius:.25rem;margin:2rem 0}
+</style>
+</head>
+<body>
+<div id="container">
+<h1>Oops!</h1>
+<p>You're banned from txt.</p>
+<div class="reason">
+<strong>Reason:</strong> <span id="reason">Loading...</span><br><br>
+<strong>Time remaining:</strong> <span id="time">Loading...</span>
+</div>
+<p>If you believe this is a mistake, please email: skunkolee(at)gmail(dot)com. There is a 3 - 5 day wait time.</p>
+</div>
+<script>
+const nick = localStorage.getItem('nickname')
+if (!nick) {
+  location.href = '/'
+} else {
+  fetch('/api/check-ban', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname: nick})
+  }).then(r => r.json()).then(data => {
+    if (!data.banned) {
+      location.href = '/feed'
+    } else {
+      document.getElementById('reason').textContent = data.reason
+      document.getElementById('time').textContent = data.timeLeft
+    }
+  })
+}
+</script>
+</body>
+</html>
