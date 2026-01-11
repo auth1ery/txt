@@ -73,6 +73,11 @@ app.post("/api/nickname", async (req, res) => {
   }
 })
 
+app.get("/api/usercount", async (req, res) => {
+  const result = await pool.query("SELECT COUNT(*) as c FROM users")
+  res.json({ count: result.rows[0].c })
+})
+
 app.get("/api/posts", async (req, res) => {
   const offset = Number(req.query.offset || 0)
   const now = Date.now()
