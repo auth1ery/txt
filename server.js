@@ -11,7 +11,10 @@ const PORT = process.env.PORT || 3000
 
 const pool = new pg.Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
+  max: 5,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 2000,
 })
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
@@ -156,6 +159,7 @@ app.get("/api/posts", async (req, res) => {
       LEFT JOIN reactions r ON p.id = r.post_id
       GROUP BY p.id
       ORDER BY p.created_at DESC
+      LIMIT 200
     `)
     postCache.data = result.rows
     postCache.timestamp = now
