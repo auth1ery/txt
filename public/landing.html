@@ -22,8 +22,8 @@ button:hover{border-color:#eaeaea;color:#fff}
 <body>
 <div id="container">
 <h1>txt</h1>
-<p>Normal social media is tiring and annoying, aint it? It sells your data like free lemonade, gives you ads as much as the amount of salt in a large cheese pizza, and desperately tries to get you addicted. We believe social media CAN be more than that!</p>
-<p>On txt, literally all of that is gone. Place your thoughts here, argue in the comments (don't do that) and read other people's thoughts and such!</p>
+<p>Social media is tiring and annoying, aint it? It sells your data like free lemonade, gives you as much ads as the amount of laptops and computers produced, and desperately tries to get you addicted. We believe social media CAN be more than that!</p>
+<p>On txt, literally all of that is gone. Place your thoughts here, argue in the comments (don't do that) and read other people's thoughts and such! We also have a strict no-AI policy, so no more robots in your feed!</p>
 <p>It's minimal, loads on all browsers as easy as pie... dude just go make an account already!!!!!!!!!</p>
 <input id="nickinput" maxlength="15" placeholder="your nickname">
 <div class="error" id="error"></div>
@@ -55,6 +55,9 @@ async function register(){
     location.href="/feed"
   }else if(r.status===409){
     err.textContent="nickname already taken"
+  }else if(r.status===429){
+    const data = await r.json()
+    err.textContent=data.error || "too many requests, slow down!"
   }else{
     err.textContent="something went wrong"
   }
