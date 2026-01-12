@@ -3,7 +3,6 @@ import pg from "pg"
 import path from "path"
 import { fileURLToPath } from "url"
 import { containsProfanity } from "./filter.js"
-import bcrypt from "bcrypt"
 import rateLimit from "express-rate-limit"
 import sanitizeHtml from "sanitize-html"
 
@@ -21,7 +20,7 @@ const pool = new pg.Pool({
 })
 
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK
-const ADMIN_PASS_HASH = process.env.ADMIN_PASS_HASH
+const ADMIN_PASS = process.env.ADMIN_PASS
 
 const generalLimiter = rateLimit({
   windowMs: 60 * 1000,
@@ -330,10 +329,9 @@ app.post("/api/report", async (req, res) => {
 
 app.post("/api/admin/verify", authLimiter, async (req, res) => {
   const { password } = req.body
-  try {
-    const isValid = await bcrypt.compare(password, ADMIN_PASS_HASH)
-    res.json({ valid: isValid })
-  } catch (error) {
+  if (password === ADMIN_PASS) {
+    res.json({ valid: true })
+  } else {
     res.json({ valid: false })
   }
 })
