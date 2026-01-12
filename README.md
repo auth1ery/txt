@@ -17,6 +17,8 @@ its very small in size of the source code and the backend is built to use as lit
 - comments and replies
 - profiles
 - reporting system
+- inboxes
+- email system
 
 # install
 
