@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>inbox</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+h2{margin-bottom:.5rem}
+button{padding:.4rem .8rem;margin:.5rem .5rem .5rem 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+.message{background:#111;border:1px solid #222;padding:1rem;margin:1rem 0;border-radius:.25rem;cursor:pointer}
+.message:hover{border-color:#333}
+.message.unread{border-left:3px solid #4c4}
+.message-header{display:flex;justify-content:space-between;margin-bottom:.5rem}
+.from{font-weight:bold;color:#eaeaea}
+.time{font-size:.8rem;color:#777}
+.subject{color:#aaa;margin-bottom:.3rem}
+.preview{font-size:.85rem;color:#777;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.broadcast{color:#f80;font-size:.7rem;font-weight:bold}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:100;overflow:auto}
+.modal-content{max-width:600px;margin:2rem auto;background:#111;border:1px solid #333;border-radius:.5rem;padding:2rem}
+.modal.show{display:block}
+.close{float:right;font-size:2rem;cursor:pointer;color:#777}
+.close:hover{color:#fff}
+.message-body{white-space:pre-wrap;margin:1rem 0;line-height:1.6}
+</style>
+</head>
+<body>
+<div id="app">
+<h2>inbox</h2>
+<button onclick="location.href='/feed'">← back</button>
+<button onclick="location.href='/compose'">compose</button>
+<div id="messages"></div>
+</div>
+
+<div id="modal" class="modal">
+<div class="modal-content">
+<span class="close" onclick="closeModal()">×</span>
+<div id="modal-body"></div>
+</div>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname=localStorage.getItem("nickname")
+
+function timeago(t){
+  const s=Math.floor((Date.now()-t)/1000)
+  if(s<60) return s+"s ago"
+  const m=Math.floor(s/60)
+  if(m<60) return m+"m ago"
+  const h=Math.floor(m/60)
+  if(h<24) return h+"h ago"
+  const d=Math.floor(h/24)
+  if(d<7) return d+"d ago"
+  return Math.floor(d/7)+"w ago"
+}
+
+async function loadMessages(){
+  const r=await fetch(`/api/messages/${nickname}`)
+  const data=await r.json()
+  const el=document.getElementById("messages")
+  
+  if(data.messages.length===0){
+    el.innerHTML='<p style="color:#777;text-align:center;margin:2rem 0">No messages yet</p>'
+    return
+  }
+  
+  el.innerHTML=data.messages.map(msg=>`
+    <div class="message ${msg.read?'':'unread'}" onclick="openMessage(${msg.id})">
+      <div class="message-header">
+        <span class="from">from: ${msg.from_user} ${msg.is_broadcast?'<span class="broadcast">BROADCAST</span>':''}</span>
+        <span class="time">${timeago(msg.created_at)}</span>
+      </div>
+      <div class="subject">${msg.subject}</div>
+      <div class="preview">${msg.content}</div>
+    </div>
+  `).join('')
+}
+
+async function openMessage(id){
+  const r=await fetch(`/api/messages/${nickname}`)
+  const data=await r.json()
+  const msg=data.messages.find(m=>m.id===id)
+  
+  document.getElementById("modal-body").innerHTML=`
+    <h3>${msg.subject}</h3>
+    <p style="color:#777;font-size:.9rem">From: ${msg.from_user} ${msg.is_broadcast?'<span class="broadcast">BROADCAST</span>':''}</p>
+    <p style="color:#777;font-size:.8rem">${timeago(msg.created_at)}</p>
+    <div class="message-body">${msg.content}</div>
+    ${!msg.is_broadcast?`<button onclick="reply('${msg.from_user}','${msg.subject}')">Reply</button>`:''}
+  `
+  
+  document.getElementById("modal").classList.add("show")
+  
+  if(!msg.read){
+    await fetch(`/api/messages/read/${id}`,{method:'POST'})
+    loadMessages()
+  }
+}
+
+function closeModal(){
+  document.getElementById("modal").classList.remove("show")
+}
+
+function reply(to,subject){
+  location.href=`/compose?to=${to}&subject=Re: ${subject}`
+}
+
+document.addEventListener('click',(e)=>{
+  if(e.target.id==='modal'){
+    closeModal()
+  }
+})
+
+loadMessages()
+</script>
+</body>
+</html>
