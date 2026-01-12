@@ -8,8 +8,7 @@
 ![made with love](https://img.shields.io/badge/made%20with-♥-red)
 
 txt is a simple and lightweight social media designed for anyone and any browser
-
-its very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU and RAM and possible as well as to save bandwidth. 
+its very small in size of the source code and the backend is built to use as little CPU and RAM as possible
 
 # features
 
@@ -21,7 +20,7 @@ its very small in size of the source code, often just some kilobytes. the fronte
 
 # install
 
-you typlically need to just run:
+to install dependencies:
 
 ```npm install```
 
@@ -34,19 +33,14 @@ cant install from that command? then you'll need to manually install node.js and
 https://nodejs.org
 https://postgresql.org
 
-after when you install the requirements, you can just run:
-
-```npm start```
-
-HOWEVER if you want to have the full features of txt:
-
-make 3 environmentable variables, and name each one of them:
-- ADMIN_PASS
-- DATABASE_URL
-- DISCORD_WEBHOOK
+after that, set up these environment variables:
 
 ADMIN_PASS is for the password to enter admin.html.   
 DATABASE_URL is your PostgreSQL database URL.   
 DISCORD_WEBHOOK is optional, but great if you want to see new posts made in real time in a Discord server.   
+
+once things are fully in and installed, start the server:
+
+```npm start```
 
 thats it!
