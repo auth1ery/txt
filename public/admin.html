@@ -36,13 +36,13 @@ select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font
 
 <div id="dashboard">
 <h1>Admin Dashboard</h1>
-<p>Welcome!</p>
-  
+
 <div class="tabs">
 <button class="tab active" onclick="showTab('reports')">Reports</button>
 <button class="tab" onclick="showTab('posts')">All Posts</button>
 <button class="tab" onclick="showTab('users')">All Users</button>
 <button class="tab" onclick="showTab('bans')">Banned Users</button>
+<button class="tab" onclick="showTab('broadcast')">Broadcast</button>
 </div>
 
 <div id="reports-tab" class="tab-content active">
@@ -70,6 +70,18 @@ select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font
 <div class="section">
 <h2>Banned Users</h2>
 <div id="bans-list"></div>
+</div>
+</div>
+
+<div id="broadcast-tab" class="tab-content">
+<div class="section">
+<h2>Broadcast Message</h2>
+<p class="small">Send a message to all users</p>
+<input type="text" id="broadcast-subject" placeholder="Subject (max 100 chars)" maxlength="100">
+<textarea id="broadcast-content" placeholder="Message content (max 500 chars)" maxlength="500" style="width:100%;min-height:150px;margin:1rem 0;padding:.7rem;background:#0f0f0f;color:#eaeaea;border:1px solid #222;box-sizing:border-box"></textarea>
+<div class="small" style="text-align:right;margin-bottom:1rem"><span id="broadcast-count">0</span>/500</div>
+<button onclick="sendBroadcast()">Send to All Users</button>
+<div id="broadcast-result" style="margin-top:1rem"></div>
 </div>
 </div>
 
@@ -165,6 +177,33 @@ async function loadUsers() {
   `).join('')
 }
 
+async function loadBans() {
+  const r = await fetch('/api/admin/bans')
+  const data = await r.json()
+  const list = document.getElementById('bans-list')
+  
+  if (data.bans.length === 0) {
+    list.innerHTML = '<p class="small">No banned users</p>'
+    return
+  }
+  
+  list.innerHTML = data.bans.map(ban => {
+    const timeLeft = ban.banned_until === -1 ? 'Permanent' : 
+      new Date(ban.banned_until) < Date.now() ? 'Expired' :
+      Math.ceil((ban.banned_until - Date.now()) / 1000 / 60 / 60 / 24) + ' days left'
+    
+    return `
+      <div class="user">
+        <div><strong>${ban.nickname}</strong></div>
+        <div><strong>Reason:</strong> ${ban.reason}</div>
+        <div class="small">Banned: ${new Date(ban.banned_at).toLocaleString()}</div>
+        <div class="small">Duration: ${timeLeft}</div>
+        <button onclick="unbanUser('${ban.nickname}')" style="color:#4c4">Unban / Appeal</button>
+      </div>
+    `
+  }).join('')
+}
+
 async function banUser(nickname, reportId) {
   const duration = prompt('Ban duration:\n1 - 1 day\n7 - 7 days\n30 - 30 days\n365 - 1 year\ninfinite - Permanent')
   if (!duration) return
@@ -214,33 +253,6 @@ async function deleteAccount(nickname) {
   if (currentTab === 'users') loadUsers()
 }
 
-async function loadBans() {
-  const r = await fetch('/api/admin/bans')
-  const data = await r.json()
-  const list = document.getElementById('bans-list')
-  
-  if (data.bans.length === 0) {
-    list.innerHTML = '<p class="small">No banned users</p>'
-    return
-  }
-  
-  list.innerHTML = data.bans.map(ban => {
-    const timeLeft = ban.banned_until === -1 ? 'Permanent' : 
-      new Date(ban.banned_until) < Date.now() ? 'Expired' :
-      Math.ceil((ban.banned_until - Date.now()) / 1000 / 60 / 60 / 24) + ' days left'
-    
-    return `
-      <div class="user">
-        <div><strong>${ban.nickname}</strong></div>
-        <div><strong>Reason:</strong> ${ban.reason}</div>
-        <div class="small">Banned: ${new Date(ban.banned_at).toLocaleString()}</div>
-        <div class="small">Duration: ${timeLeft}</div>
-        <button onclick="unbanUser('${ban.nickname}')" style="color:#4c4">Unban / Appeal</button>
-      </div>
-    `
-  }).join('')
-}
-
 async function unbanUser(nickname) {
   if (!confirm(`Unban ${nickname}? They'll be able to access the site again.`)) return
   
@@ -252,6 +264,40 @@ async function unbanUser(nickname) {
   
   alert('User unbanned!')
   loadBans()
+}
+
+document.getElementById('broadcast-content')?.addEventListener('input', (e) => {
+  document.getElementById('broadcast-count').textContent = e.target.value.length
+})
+
+async function sendBroadcast() {
+  const subject = document.getElementById('broadcast-subject').value.trim()
+  const content = document.getElementById('broadcast-content').value.trim()
+  const result = document.getElementById('broadcast-result')
+  
+  if (!subject || !content) {
+    result.innerHTML = '<p style="color:#c44">Please fill in both subject and message</p>'
+    return
+  }
+  
+  if (!confirm(`Send this message to ALL users?`)) return
+  
+  result.innerHTML = '<p style="color:#aaa">Sending...</p>'
+  
+  const r = await fetch('/api/admin/broadcast', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({subject, content})
+  })
+  
+  if (r.ok) {
+    result.innerHTML = '<p style="color:#4c4">Broadcast sent to all users!</p>'
+    document.getElementById('broadcast-subject').value = ''
+    document.getElementById('broadcast-content').value = ''
+    document.getElementById('broadcast-count').textContent = '0'
+  } else {
+    result.innerHTML = '<p style="color:#c44">Error sending broadcast</p>'
+  }
 }
 </script>
 </body>
