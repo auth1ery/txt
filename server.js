@@ -41,7 +41,6 @@ const authLimiter = rateLimit({
 })
 
 app.use(express.json())
-app.use('/api/', generalLimiter)
 
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "landing.html"))
@@ -73,6 +72,14 @@ app.get("/banned", (req, res) => {
 
 app.get("/hell", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "hell.html"))
+})
+
+app.get("/inbox", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "inbox.html"))
+})
+
+app.get("/compose", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "compose.html"))
 })
 
 app.use(express.static("public"))
@@ -118,6 +125,16 @@ async function initDB() {
       reason TEXT,
       banned_until BIGINT,
       banned_at BIGINT
+    );
+    CREATE TABLE IF NOT EXISTS messages (
+      id SERIAL PRIMARY KEY,
+      from_user TEXT,
+      to_user TEXT,
+      subject TEXT,
+      content TEXT,
+      created_at BIGINT,
+      read BOOLEAN DEFAULT FALSE,
+      is_broadcast BOOLEAN DEFAULT FALSE
     );
   `)
 }
@@ -414,6 +431,69 @@ app.delete("/api/admin/account/:nick", async (req, res) => {
     console.error(error)
     res.sendStatus(500)
   }
+})
+
+app.get("/api/messages/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT * FROM messages WHERE to_user = $1 ORDER BY created_at DESC",
+    [nickname]
+  )
+  res.json({ messages: result.rows })
+})
+
+app.get("/api/messages/unread/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT COUNT(*) as c FROM messages WHERE to_user = $1 AND read = FALSE",
+    [nickname]
+  )
+  res.json({ count: result.rows[0].c })
+})
+
+app.post("/api/messages", postLimiter, async (req, res) => {
+  const { from_user, to_user, subject, content } = req.body
+  if (!to_user || !subject || !content) return res.sendStatus(400)
+  if (subject.length > 100 || content.length > 500) return res.sendStatus(400)
+  
+  const sanitizedSubject = sanitizeHtml(subject, { allowedTags: [], allowedAttributes: {} })
+  const sanitizedContent = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} })
+  
+  const userExists = await pool.query("SELECT * FROM users WHERE nickname = $1", [to_user.toLowerCase()])
+  if (userExists.rows.length === 0) return res.status(404).json({ error: "User not found" })
+  
+  await pool.query(
+    "INSERT INTO messages(from_user, to_user, subject, content, created_at) VALUES($1, $2, $3, $4, $5)",
+    [from_user, to_user.toLowerCase(), sanitizedSubject, sanitizedContent, Date.now()]
+  )
+  
+  res.sendStatus(200)
+})
+
+app.post("/api/messages/read/:id", async (req, res) => {
+  const id = req.params.id
+  await pool.query("UPDATE messages SET read = TRUE WHERE id = $1", [id])
+  res.sendStatus(200)
+})
+
+app.post("/api/admin/broadcast", async (req, res) => {
+  const { subject, content } = req.body
+  if (!subject || !content) return res.sendStatus(400)
+  if (subject.length > 100 || content.length > 500) return res.sendStatus(400)
+  
+  const sanitizedSubject = sanitizeHtml(subject, { allowedTags: [], allowedAttributes: {} })
+  const sanitizedContent = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} })
+  
+  const users = await pool.query("SELECT nickname FROM users")
+  
+  for (const user of users.rows) {
+    await pool.query(
+      "INSERT INTO messages(from_user, to_user, subject, content, created_at, is_broadcast) VALUES($1, $2, $3, $4, $5, $6)",
+      ["admin", user.nickname, sanitizedSubject, sanitizedContent, Date.now(), true]
+    )
+  }
+  
+  res.sendStatus(200)
 })
 
 app.listen(PORT, () => {
