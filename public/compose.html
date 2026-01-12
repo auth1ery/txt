@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>compose</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+h2{margin-bottom:1rem}
+input,textarea{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.7rem;margin:.5rem 0;font-size:1rem;box-sizing:border-box;font-family:system-ui,sans-serif}
+textarea{min-height:200px;resize:vertical}
+button{padding:.7rem 1.5rem;margin:1rem .5rem 0 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer;font-size:1rem}
+button:hover{border-color:#eaeaea;color:#fff}
+.error{color:#c44;font-size:.85rem;margin:.5rem 0}
+.success{color:#4c4;font-size:.85rem;margin:.5rem 0}
+label{display:block;color:#aaa;font-size:.9rem;margin-top:1rem}
+.char-count{font-size:.8rem;color:#777;text-align:right}
+</style>
+</head>
+<body>
+<div id="app">
+<h2>compose message</h2>
+<button onclick="location.href='/inbox'">← back to inbox</button>
+
+<label>To:</label>
+<input id="to" maxlength="15" placeholder="username">
+
+<label>Subject:</label>
+<input id="subject" maxlength="100" placeholder="subject">
+<div class="char-count"><span id="subject-count">0</span>/100</div>
+
+<label>Message:</label>
+<textarea id="content" maxlength="500" placeholder="write your message..."></textarea>
+<div class="char-count"><span id="content-count">0</span>/500</div>
+
+<div class="error" id="error"></div>
+<div class="success" id="success"></div>
+
+<button onclick="send()">Send</button>
+<button onclick="location.href='/inbox'">Cancel</button>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname=localStorage.getItem("nickname")
+
+const params=new URLSearchParams(window.location.search)
+if(params.get('to')){
+  document.getElementById('to').value=params.get('to')
+}
+if(params.get('subject')){
+  document.getElementById('subject').value=params.get('subject')
+}
+
+document.getElementById('subject').addEventListener('input',e=>{
+  document.getElementById('subject-count').textContent=e.target.value.length
+})
+
+document.getElementById('content').addEventListener('input',e=>{
+  document.getElementById('content-count').textContent=e.target.value.length
+})
+
+async function send(){
+  const to=document.getElementById('to').value.trim().toLowerCase()
+  const subject=document.getElementById('subject').value.trim()
+  const content=document.getElementById('content').value.trim()
+  const err=document.getElementById('error')
+  const success=document.getElementById('success')
+  
+  err.textContent=''
+  success.textContent=''
+  
+  if(!to){
+    err.textContent='please enter a recipient'
+    return
+  }
+  if(!subject){
+    err.textContent='please enter a subject'
+    return
+  }
+  if(!content){
+    err.textContent='please enter a message'
+    return
+  }
+  
+  const r=await fetch('/api/messages',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({from_user:nickname,to_user:to,subject,content})
+  })
+  
+  if(r.status===404){
+    err.textContent='user not found'
+    return
+  }
+  if(r.status===429){
+    const data=await r.json()
+    err.textContent=data.error||'too many messages, slow down!'
+    return
+  }
+  if(!r.ok){
+    err.textContent='error sending message'
+    return
+  }
+  
+  success.textContent='message sent!'
+  document.getElementById('to').value=''
+  document.getElementById('subject').value=''
+  document.getElementById('content').value=''
+  document.getElementById('subject-count').textContent='0'
+  document.getElementById('content-count').textContent='0'
+  
+  setTimeout(()=>{
+    location.href='/inbox'
+  },1500)
+}
+</script>
+</body>
+</html>
