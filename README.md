@@ -20,7 +20,9 @@ its very small in size of the source code and the backend is built to use as lit
 
 # install
 
-to install dependencies:
+before you install dependencies, you need to delete .github/workflows/discord.yml. its not required and is only for this repo ONLY.
+
+after that, run:
 
 ```npm install```
 
