@@ -1,5 +1,5 @@
 ### txt
-> "some like social media thing"   
+> "anti-social for a reason"   
 
 ![status](https://img.shields.io/badge/status-active-success)
 ![license](https://img.shields.io/badge/license-MIT-blue)
@@ -9,7 +9,7 @@
 
 txt is a simple and lightweight social media designed for anyone and any browser
 
-its very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU, and RAM and possible as well as save bandwidth. 
+its very small in size of the source code, often just some kilobytes. the frontend and backend is built to use as little CPU and RAM and possible as well as to save bandwidth. 
 
 # features
 
@@ -50,9 +50,3 @@ DATABASE_URL is your PostgreSQL database URL.
 DISCORD_WEBHOOK is optional, but great if you want to see new posts made in real time in a Discord server.   
 
 thats it!
-
-<br>
-<br>
-<p align="center">
-   ⚡
-</p>
