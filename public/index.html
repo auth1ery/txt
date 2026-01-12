@@ -6,6 +6,8 @@
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
+#inbox-btn{position:relative}
+#inbox-btn .badge{position:absolute;top:-5px;right:-5px;background:#c44;color:#fff;border-radius:50%;padding:2px 6px;font-size:.7rem;font-weight:bold}
 textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
 button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
@@ -24,14 +26,12 @@ a:hover{color:#fff}
 .dropdown{display:none;position:absolute;background:#111;border:1px solid #333;border-radius:.25rem;padding:.5rem;min-width:180px;right:0;z-index:10}
 .dropdown.show{display:block}
 .dropdown button{display:block;width:100%;text-align:left;margin:.2rem 0;padding:.4rem}
-.footer{text-align:center;padding:2rem 0;margin-top:2rem;border-top:1px solid #222;font-size:.85rem}
-.footer a{color:#777;text-decoration:none;margin:0 1rem}
-.footer a:hover{color:#eaeaea}
 </style>
 </head>
 <body>
 <div id="app">
 <h2 id="greeting"></h2>
+<button onclick="location.href='/inbox'" id="inbox-btn">inbox</button>
 <textarea id="postinput" maxlength="200" placeholder="write"></textarea>
 <button onclick="createpost()">post</button>
 <button onclick="deleteaccount()" style="float:right;color:#c44">delete account</button>
@@ -40,12 +40,12 @@ a:hover{color:#fff}
 <button id="refresh" onclick="location.reload()">refresh</button>
 </div>
 
-<div class="footer">
+  <div class="footer">
   <a href="/privacy">privacy policy</a>
   <a href="/terms">terms of service</a>
   <a href="https://txt1.statuspage.io/" target="_blank">status</a>
 </div>
-
+  
 <script>
 if(!localStorage.getItem("nickname")){
   location.href="/"
@@ -69,10 +69,7 @@ function getGreeting() {
     `welcome, ${nickname}`,
     `hi ${nickname}`,
     `scrolling now, ${nickname}?`,
-    `i like your shirt ${nickname}`,
-    `yo ${nickname}`,
-    `what time is it, ${nickname}?`,
-    `hey there ${nickname}`
+    `i like your shirt ${nickname}`
   ]
   
   let greeting
@@ -120,6 +117,18 @@ async function checkAccountExists(){
 
 checkBan()
 checkAccountExists()
+
+async function checkUnread(){
+  const r = await fetch(`/api/messages/unread/${nickname}`)
+  const data = await r.json()
+  if(data.count > 0){
+    const btn = document.getElementById('inbox-btn')
+    btn.innerHTML = `inbox <span class="badge">${data.count}</span>`
+  }
+}
+
+checkUnread()
+setInterval(checkUnread, 30000)
 
 function timeago(t){
   const s=Math.floor((Date.now()-t)/1000)
