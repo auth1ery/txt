@@ -31,6 +31,8 @@ a:hover{color:#fff}
 .footer{text-align:center;padding:2rem 0;margin-top:2rem;border-top:1px solid #222;font-size:.85rem}
 .footer a{color:#777;text-decoration:none;margin:0 1rem}
 .footer a:hover{color:#eaeaea}
+  .greeting-link{color:#eaeaea;text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+.greeting-link:hover{text-decoration:none;color:#888}
 </style>
 </head>
 <body>
@@ -75,7 +77,7 @@ function getGreeting() {
     `welcome, ${nickname}`,
     `hi ${nickname}`,
     `scrolling now, ${nickname}?`,
-    `i like your shirt ${nickname}`
+    `hello ${nickname}`
   ]
   
   let greeting
@@ -100,7 +102,9 @@ function getGreeting() {
   return greeting
 }
 
-document.getElementById('greeting').textContent = getGreeting()
+const greetingText = getGreeting()
+const greetingHTML = greetingText.replace(nickname, `<a href="/profile/${nickname}" class="greeting-link">${nickname}</a>`)
+document.getElementById('greeting').innerHTML = greetingHTML
 
 async function checkBan(){
   const r = await fetch('/api/check-ban', {
