@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>settings</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+h2{margin-bottom:1rem}
+label{display:block;color:#aaa;font-size:.9rem;margin-top:1rem}
+input,textarea,select{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.7rem;margin:.5rem 0;font-size:1rem;box-sizing:border-box;font-family:system-ui,sans-serif}
+textarea{min-height:100px;resize:vertical}
+button{padding:.7rem 1.5rem;margin:1rem .5rem 0 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer;font-size:1rem}
+button:hover{border-color:#eaeaea;color:#fff}
+.char-count{font-size:.8rem;color:#777;text-align:right}
+.error{color:#c44;font-size:.85rem;margin:.5rem 0}
+.success{color:#4c4;font-size:.85rem;margin:.5rem 0}
+.hint{font-size:.8rem;color:#666;margin:.3rem 0}
+</style>
+</head>
+<body>
+<div id="app">
+<h2>profile settings</h2>
+<button onclick="location.href='/feed'">← back to feed</button>
+<button onclick="location.href='/profile/'+nickname">view profile</button>
+
+<label>Bio</label>
+<div class="hint">Tell people about yourself (200 chars max)</div>
+<textarea id="bio" maxlength="200" placeholder="your bio..."></textarea>
+<div class="char-count"><span id="bio-count">0</span>/200</div>
+
+<label>Status</label>
+<div class="hint">How are you feeling? (50 chars max)</div>
+<input id="status" maxlength="50" placeholder="vibing, tired, chaotic...">
+<div class="char-count"><span id="status-count">0</span>/50</div>
+
+<label>Pronouns</label>
+<div class="hint">Optional (50 chars max)</div>
+<input id="pronouns" maxlength="50" placeholder="she/her, he/him, they/them...">
+<div class="char-count"><span id="pronouns-count">0</span>/50</div>
+
+<label>Timezone</label>
+<div class="hint">Helps others know when you're active</div>
+<select id="timezone">
+<option value="UTC">UTC</option>
+<option value="America/New_York">EST (New York)</option>
+<option value="America/Chicago">CST (Chicago)</option>
+<option value="America/Denver">MST (Denver)</option>
+<option value="America/Los_Angeles">PST (Los Angeles)</option>
+<option value="Europe/London">GMT (London)</option>
+<option value="Europe/Paris">CET (Paris)</option>
+<option value="Asia/Tokyo">JST (Tokyo)</option>
+<option value="Australia/Sydney">AEST (Sydney)</option>
+<option value="Asia/Shanghai">CST (Shanghai)</option>
+<option value="Asia/Dubai">GST (Dubai)</option>
+<option value="America/Sao_Paulo">BRT (São Paulo)</option>
+<option value="Africa/Cairo">EET (Cairo)</option>
+<option value="Asia/Kolkata">IST (India)</option>
+<option value="America/Toronto">EST (Toronto)</option>
+<option value="America/Vancouver">PST (Vancouver)</option>
+<option value="America/Mexico_City">CST (Mexico City)</option>
+<option value="Europe/Berlin">CET (Berlin)</option>
+<option value="Europe/Moscow">MSK (Moscow)</option>
+<option value="Asia/Seoul">KST (Seoul)</option>
+<option value="Pacific/Auckland">NZST (Auckland)</option>
+</select>
+
+<div class="error" id="error"></div>
+<div class="success" id="success"></div>
+
+<button onclick="save()">Save Changes</button>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname=localStorage.getItem("nickname")
+
+document.getElementById('bio').addEventListener('input',e=>{
+  document.getElementById('bio-count').textContent=e.target.value.length
+})
+
+document.getElementById('status').addEventListener('input',e=>{
+  document.getElementById('status-count').textContent=e.target.value.length
+})
+
+document.getElementById('pronouns').addEventListener('input',e=>{
+  document.getElementById('pronouns-count').textContent=e.target.value.length
+})
+
+async function loadSettings(){
+  const r=await fetch(`/api/profile/${nickname}`)
+  if(!r.ok) return
+  
+  const data=await r.json()
+  document.getElementById('bio').value=data.bio || ''
+  document.getElementById('status').value=data.status || ''
+  document.getElementById('pronouns').value=data.pronouns || ''
+  document.getElementById('timezone').value=data.timezone || 'UTC'
+  
+  document.getElementById('bio-count').textContent=data.bio?.length || 0
+  document.getElementById('status-count').textContent=data.status?.length || 0
+  document.getElementById('pronouns-count').textContent=data.pronouns?.length || 0
+}
+
+async function save(){
+  const bio=document.getElementById('bio').value.trim()
+  const status=document.getElementById('status').value.trim()
+  const pronouns=document.getElementById('pronouns').value.trim()
+  const timezone=document.getElementById('timezone').value
+  
+  const err=document.getElementById('error')
+  const success=document.getElementById('success')
+  
+  err.textContent=''
+  success.textContent=''
+  
+  const r=await fetch('/api/profile/update',{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({nickname,bio,status,pronouns,timezone})
+  })
+  
+  if(!r.ok){
+    err.textContent='error saving settings'
+    return
+  }
+  
+  success.textContent='settings saved!'
+  setTimeout(()=>{
+    location.href='/profile/'+nickname
+  },1500)
+}
+
+loadSettings()
+</script>
+</body>
+</html>
