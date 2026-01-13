@@ -8,9 +8,9 @@ body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
 h2{margin-bottom:.2rem;display:inline-block}
 p{margin:.2rem 0;font-size:0.9rem;color:#aaa}
-button{padding:.4rem .8rem;margin:.5rem 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button{padding:.4rem .8rem;margin:.5rem .5rem .5rem 0;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
-a{color:#aaa;text-decoration:none}
+a{color:#777;text-decoration:none}
 a:hover{color:#fff}
 .menu{position:relative;display:inline-block;margin-left:1rem}
 .dots{background:none;border:none;color:#aaa;font-size:1.5rem;cursor:pointer;padding:0 .5rem}
@@ -18,13 +18,31 @@ a:hover{color:#fff}
 .dropdown{display:none;position:absolute;background:#111;border:1px solid #333;border-radius:.25rem;padding:.5rem;min-width:150px;right:0;z-index:10}
 .dropdown.show{display:block}
 .dropdown button{display:block;width:100%;text-align:left;margin:.2rem 0}
+.bio{background:#111;border:1px solid #222;padding:1rem;margin:1rem 0;border-radius:.25rem;line-height:1.5}
+.stats{display:flex;flex-wrap:wrap;gap:1rem;margin:1rem 0;font-size:.85rem}
+.stat{background:#111;border:1px solid #222;padding:.7rem 1rem;border-radius:.25rem}
+.stat-label{color:#777;font-size:.75rem}
+.stat-value{color:#eaeaea;font-weight:bold;font-size:1.1rem}
+.status{color:#4c4;font-style:italic}
+.pronouns{color:#888;font-size:.85rem}
+.join-badge{background:#222;color:#f80;padding:.2rem .5rem;border-radius:.25rem;font-size:.75rem;font-weight:bold}
+.controversy{font-size:.85rem;margin:.5rem 0}
+.controversy-bar{height:10px;background:#222;border-radius:5px;overflow:hidden;margin:.3rem 0}
+.controversy-fill{height:100%;background:linear-gradient(to right, #c44, #4c4);transition:width .3s}
+.last-post{background:#0a0a0a;border:1px solid #222;padding:1rem;margin:1rem 0;border-radius:.25rem}
+.last-post-label{color:#777;font-size:.75rem;margin-bottom:.5rem}
+.mention{color:#4c4;font-weight:bold}
+.external-link{color:#88f}
 </style>
 </head>
 <body>
 <div id="app">
 <button onclick="location.href='/feed'">← back</button>
+<button onclick="location.href='/settings'" id="settings-btn" style="display:none">edit profile</button>
+
 <div>
 <h2 id="nickname"></h2>
+<span id="pronouns" class="pronouns"></span>
 <div class="menu">
 <button class="dots" onclick="toggleMenu()">⋯</button>
 <div id="menu" class="dropdown">
@@ -32,20 +50,59 @@ a:hover{color:#fff}
 </div>
 </div>
 </div>
+
 <p id="join"></p>
-<p id="counts"></p>
+<p id="status" class="status"></p>
+
+<div id="bio" class="bio" style="display:none"></div>
+
+<div class="stats">
+<div class="stat">
+<div class="stat-label">posts</div>
+<div class="stat-value" id="posts">0</div>
+</div>
+<div class="stat">
+<div class="stat-label">comments</div>
+<div class="stat-value" id="comments">0</div>
+</div>
+<div class="stat">
+<div class="stat-label">timezone</div>
+<div class="stat-value" id="timezone">UTC</div>
+</div>
+</div>
+
+<div class="controversy" id="controversy-section" style="display:none">
+<strong>Controversy Score:</strong> <span id="controversy-score">0</span>% upvotes
+<div class="controversy-bar">
+<div class="controversy-fill" id="controversy-fill"></div>
+</div>
+<span style="font-size:.75rem;color:#777"><span id="upvotes">0</span> upvotes, <span id="downvotes">0</span> downvotes</span>
+</div>
+
+<div id="last-post-section" style="display:none">
+<div class="last-post-label">LAST POST:</div>
+<div class="last-post" id="last-post"></div>
+</div>
+
 </div>
 <script>
 const nick=location.pathname.split("/profile/")[1]
 const currentUser=localStorage.getItem("nickname")
+
+if(currentUser && currentUser.toLowerCase() === nick.toLowerCase()){
+  document.getElementById('settings-btn').style.display='inline-block'
+}
+
 function toggleMenu(){
   document.getElementById("menu").classList.toggle("show")
 }
+
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.menu')) {
     document.getElementById("menu").classList.remove("show")
   }
 })
+
 async function reportUser(){
   const reason = prompt("What's the reason for reporting this user?")
   if(!reason) return
@@ -64,6 +121,42 @@ async function reportUser(){
   alert("Great! Human moderators will review it shortly.")
   toggleMenu()
 }
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function processContent(text) {
+  text = escapeHtml(text)
+  text = text.replace(/@(\w+)/g, '<a href="/profile/$1" class="mention">@$1</a>')
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  text = text.replace(urlRegex, (url) => {
+    const escaped = url.replace(/'/g, '&#39;')
+    return `<a href="#" onclick="confirmLink('${escaped}'); return false" class="external-link">${url}</a>`
+  })
+  return text
+}
+
+function confirmLink(url) {
+  if (confirm("You're going to go OUTSIDE of txt. Make sure you trust the link before you proceed!\n\nGo to: " + url)) {
+    window.open(url, '_blank')
+  }
+}
+
+function timeago(t){
+  const s=Math.floor((Date.now()-t)/1000)
+  if(s<60) return s+"s ago"
+  const m=Math.floor(s/60)
+  if(m<60) return m+"m ago"
+  const h=Math.floor(m/60)
+  if(h<24) return h+"h ago"
+  const d=Math.floor(h/24)
+  if(d<7) return d+"d ago"
+  return Math.floor(d/7)+"w ago"
+}
+
 if(nick){
   fetch("/api/profile/"+nick)
     .then(r=>{
@@ -72,9 +165,39 @@ if(nick){
     })
     .then(d=>{
       document.getElementById("nickname").textContent="@"+d.nickname
+      
       const date=new Date(Number(d.created_at))
-      document.getElementById("join").textContent="joined: "+date.toDateString()
-      document.getElementById("counts").textContent = `posts: ${d.posts} · comments: ${d.comments}`
+      document.getElementById("join").innerHTML=`joined: ${date.toDateString()} <span class="join-badge">user #${d.joinNumber}</span>`
+      
+      if(d.pronouns){
+        document.getElementById("pronouns").textContent=`(${d.pronouns})`
+      }
+      
+      if(d.status){
+        document.getElementById("status").textContent=`"${d.status}"`
+      }
+      
+      if(d.bio){
+        document.getElementById("bio").textContent=d.bio
+        document.getElementById("bio").style.display='block'
+      }
+      
+      document.getElementById("posts").textContent=d.posts
+      document.getElementById("comments").textContent=d.comments
+      document.getElementById("timezone").textContent=d.timezone
+      
+      if(d.posts > 0){
+        document.getElementById("controversy-section").style.display='block'
+        document.getElementById("controversy-score").textContent=d.controversyScore
+        document.getElementById("upvotes").textContent=d.upvotes
+        document.getElementById("downvotes").textContent=d.downvotes
+        document.getElementById("controversy-fill").style.width=d.controversyScore+'%'
+      }
+      
+      if(d.lastPost){
+        document.getElementById("last-post-section").style.display='block'
+        document.getElementById("last-post").innerHTML=`${processContent(d.lastPost.content)}<br><span style="font-size:.75rem;color:#777">${timeago(d.lastPost.created_at)}</span>`
+      }
     })
     .catch(err=>{
       document.getElementById("nickname").textContent="couldnt find user :("
