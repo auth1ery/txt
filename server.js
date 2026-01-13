@@ -82,6 +82,10 @@ app.get("/compose", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "compose.html"))
 })
 
+app.get("/license", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "licenseview.html"))
+})
+
 app.use(express.static("public"))
 
 async function initDB() {
