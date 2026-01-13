@@ -72,7 +72,7 @@ if(nick){
     })
     .then(d=>{
       document.getElementById("nickname").textContent="@"+d.nickname
-      const date=new Date(d.created_at)
+      const date=new Date(Number(d.created_at))
       document.getElementById("join").textContent="joined: "+date.toDateString()
       document.getElementById("counts").textContent = `posts: ${d.posts} · comments: ${d.comments}`
     })
