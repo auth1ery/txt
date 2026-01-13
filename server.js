@@ -82,6 +82,10 @@ app.get("/compose", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "compose.html"))
 })
 
+app.get("/settings", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "settings.html"))
+})
+
 app.get("/license", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "licenseview.html"))
 })
@@ -92,7 +96,11 @@ async function initDB() {
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       nickname TEXT PRIMARY KEY,
-      created_at BIGINT
+      created_at BIGINT,
+      bio TEXT DEFAULT '',
+      status TEXT DEFAULT '',
+      timezone TEXT DEFAULT 'UTC',
+      pronouns TEXT DEFAULT ''
     );
     CREATE TABLE IF NOT EXISTS posts (
       id SERIAL PRIMARY KEY,
@@ -140,6 +148,22 @@ async function initDB() {
       read BOOLEAN DEFAULT FALSE,
       is_broadcast BOOLEAN DEFAULT FALSE
     );
+    
+    DO $$ 
+    BEGIN
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='bio') THEN
+        ALTER TABLE users ADD COLUMN bio TEXT DEFAULT '';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='status') THEN
+        ALTER TABLE users ADD COLUMN status TEXT DEFAULT '';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='timezone') THEN
+        ALTER TABLE users ADD COLUMN timezone TEXT DEFAULT 'UTC';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='pronouns') THEN
+        ALTER TABLE users ADD COLUMN pronouns TEXT DEFAULT '';
+      END IF;
+    END $$;
   `)
 }
 
@@ -310,12 +334,65 @@ app.get("/api/profile/:nick", async (req, res) => {
   const postsResult = await pool.query("SELECT COUNT(*) as c FROM posts WHERE nickname = $1", [nick])
   const commentsResult = await pool.query("SELECT COUNT(*) as c FROM comments WHERE nickname = $1", [nick])
   
+  const joinNumberResult = await pool.query(
+    "SELECT COUNT(*) as num FROM users WHERE created_at <= $1",
+    [userResult.rows[0].created_at]
+  )
+  
+  const reactionsResult = await pool.query(`
+    SELECT 
+      SUM(CASE WHEN r.value = 1 THEN 1 ELSE 0 END) as upvotes,
+      SUM(CASE WHEN r.value = -1 THEN 1 ELSE 0 END) as downvotes
+    FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+    WHERE p.nickname = $1
+  `, [nick])
+  
+  const upvotes = Number(reactionsResult.rows[0].upvotes) || 0
+  const downvotes = Number(reactionsResult.rows[0].downvotes) || 0
+  const total = upvotes + downvotes
+  const controversyScore = total > 0 ? Math.round((upvotes / total) * 100) : 0
+  
+  const lastPostResult = await pool.query(
+    "SELECT * FROM posts WHERE nickname = $1 ORDER BY created_at DESC LIMIT 1",
+    [nick]
+  )
+  
   res.json({
     nickname: nick,
     created_at: userResult.rows[0].created_at,
+    bio: userResult.rows[0].bio || '',
+    status: userResult.rows[0].status || '',
+    timezone: userResult.rows[0].timezone || 'UTC',
+    pronouns: userResult.rows[0].pronouns || '',
     posts: postsResult.rows[0].c,
-    comments: commentsResult.rows[0].c
+    comments: commentsResult.rows[0].c,
+    joinNumber: joinNumberResult.rows[0].num,
+    controversyScore,
+    upvotes,
+    downvotes,
+    lastPost: lastPostResult.rows[0] || null
   })
+})
+
+app.post("/api/profile/update", async (req, res) => {
+  const { nickname, bio, status, timezone, pronouns } = req.body
+  if (!nickname) return res.sendStatus(400)
+  
+  if (bio && bio.length > 200) return res.sendStatus(400)
+  if (status && status.length > 50) return res.sendStatus(400)
+  if (pronouns && pronouns.length > 50) return res.sendStatus(400)
+  
+  const sanitizedBio = bio ? sanitizeHtml(bio, { allowedTags: [], allowedAttributes: {} }) : ''
+  const sanitizedStatus = status ? sanitizeHtml(status, { allowedTags: [], allowedAttributes: {} }) : ''
+  const sanitizedPronouns = pronouns ? sanitizeHtml(pronouns, { allowedTags: [], allowedAttributes: {} }) : ''
+  
+  await pool.query(
+    "UPDATE users SET bio = $1, status = $2, timezone = $3, pronouns = $4 WHERE nickname = $5",
+    [sanitizedBio, sanitizedStatus, timezone || 'UTC', sanitizedPronouns, nickname.toLowerCase()]
+  )
+  
+  res.sendStatus(200)
 })
 
 app.delete("/api/account/:nick", async (req, res) => {
