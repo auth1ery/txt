@@ -38,17 +38,14 @@ a:hover{color:#fff}
 <script>
 const nick=location.pathname.split("/profile/")[1]
 const currentUser=localStorage.getItem("nickname")
-
 function toggleMenu(){
   document.getElementById("menu").classList.toggle("show")
 }
-
 document.addEventListener('click', (e) => {
   if (!e.target.closest('.menu')) {
     document.getElementById("menu").classList.remove("show")
   }
 })
-
 async function reportUser(){
   const reason = prompt("What's the reason for reporting this user?")
   if(!reason) return
@@ -67,7 +64,6 @@ async function reportUser(){
   alert("Great! Human moderators will review it shortly.")
   toggleMenu()
 }
-
 if(nick){
   fetch("/api/profile/"+nick)
     .then(r=>{
@@ -78,10 +74,10 @@ if(nick){
       document.getElementById("nickname").textContent="@"+d.nickname
       const date=new Date(d.created_at)
       document.getElementById("join").textContent="joined: "+date.toDateString()
-      document.getElementById("counts").textContent=`posts: ${d.posts} · comments: ${d.comments}`
+      document.getElementById("counts").textContent = `posts: ${d.posts} · comments: ${d.comments}`
     })
     .catch(err=>{
-      document.getElementById("nickname").textContent="erm... you sure they exist?"
+      document.getElementById("nickname").textContent="couldnt find user :("
     })
 }
 </script>
