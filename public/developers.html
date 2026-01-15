@@ -33,241 +33,132 @@ h3{color:#aaa}
 <div id="app">
 <button class="back-btn" onclick="location.href='/feed'">← back to feed</button>
 
-<h1>API Documentation</h1>
-<p>Build apps and integrations with txt's public API. Get started by creating an API key below.</p>
+<h1>API Documentatation</h1>
+
+<p class="stats">
+  A simple, public REST API for accessing public data on txt.
+  It is very easy to use and easy to fetch.
+  These APIs are used throughout txt as well, not just for user use.
+</p>
+
+<p>As txt scales on, these APIs may become unusable and reserved for internal use, or may be unstable.</p>
 
 <div class="section">
-  <h2>Your API Keys</h2>
-  <div id="keys-container"></div>
-  
-  <div style="margin-top:1rem">
-    <input type="text" id="key-name" placeholder="API key name (e.g. 'My App')" maxlength="50">
-    <button onclick="createKey()">Create API Key</button>
-    <p class="stats">Maximum 3 keys per account. Each key has a limit of 1000 requests per day.</p>
+  <h2>Base URL</h2>
+  <div class="code-block">
+    <pre>https://txt-ctgm.onrender.com</pre>
   </div>
 </div>
 
 <div class="section">
-  <h2>Authentication</h2>
-  <p>Include your API key in the <code>X-API-Key</code> header with every request:</p>
-  <div class="code-block"><pre>X-API-Key: txt_your_api_key_here</pre></div>
-</div>
+  <h2>Public Endpoints</h2>
 
-<div class="section">
-  <h2>Endpoints</h2>
-  
-  <h3>GET /api/v1/posts</h3>
-  <p>Get a list of posts with pagination</p>
-  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/posts?limit=20&offset=0</div>
-  <div class="code-block"><pre>{
+  <h3>Get latest posts</h3>
+  <div class="endpoint">GET /api/posts</div>
+  <p>
+    Returns the most recent public posts. Posts are ordered newest first.
+  </p>
+
+  <p class="stats">Query parameters:</p>
+  <ul class="stats">
+    <li><code>offset</code> (optional) — number of posts to skip (pagination)</li>
+  </ul>
+
+  <div class="code-block">
+    <pre>{
   "posts": [
     {
       "id": 123,
       "nickname": "user",
       "content": "hello world",
-      "created_at": 1234567890,
+      "created_at": 1710000000000,
       "score": 5
     }
   ],
-  "pagination": {
-    "limit": 20,
-    "offset": 0,
-    "count": 20
-  }
-}</pre></div>
-  
-  <h3>GET /api/v1/posts/:id</h3>
-  <p>Get a single post with its comments</p>
-  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/posts/123</div>
-  <div class="code-block"><pre>{
-  "post": {
-    "id": 123,
-    "nickname": "user",
-    "content": "hello world",
-    "created_at": 1234567890,
-    "score": 5
-  },
   "comments": [
     {
       "id": 456,
       "post_id": 123,
-      "nickname": "commenter",
+      "parent_id": null,
+      "nickname": "anotheruser",
       "content": "nice post",
-      "created_at": 1234567900
+      "created_at": 1710000001000
     }
   ]
-}</pre></div>
+}</pre>
+  </div>
 
-  <h3>GET /api/v1/users/:nickname</h3>
-  <p>Get a user's profile information</p>
-  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/users/username</div>
-  <div class="code-block"><pre>{
-  "nickname": "username",
-  "created_at": 1234567890,
-  "bio": "just vibing",
-  "status": "online",
+  <p class="stats">
+    Notes:
+    <br>• Results are cached briefly for performance
+    <br>• Maximum of 20 posts returned per request. Any more will likely fail.
+  </p>
+</div>
+
+<div class="section">
+  <h3>Get user profile</h3>
+  <div class="endpoint">GET /api/profile/:nickname</div>
+  <p>
+    Returns public profile information and statistics for a user.
+  </p>
+
+  <div class="code-block">
+    <pre>{
+  "nickname": "user",
+  "created_at": 1700000000000,
+  "bio": "",
+  "status": "",
   "timezone": "UTC",
-  "pronouns": "they/them",
-  "stats": {
-    "posts": 42,
-    "comments": 100,
-    "joinNumber": 1337,
-    "upvotes": 200,
-    "downvotes": 10
+  "pronouns": "",
+  "posts": 12,
+  "comments": 34,
+  "joinNumber": 42,
+  "controversyScore": 63,
+  "upvotes": 120,
+  "downvotes": 70,
+  "lastPost": {
+    "id": 789,
+    "content": "latest post",
+    "created_at": 1710000100000
   }
-}</pre></div>
-
-  <h3>GET /api/v1/users/:nickname/posts</h3>
-  <p>Get all posts by a specific user</p>
-  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/users/username/posts?limit=20&offset=0</div>
-  <div class="code-block"><pre>{
-  "posts": [...],
-  "pagination": {
-    "limit": 20,
-    "offset": 0,
-    "count": 20
-  }
-}</pre></div>
-
-  <h3>GET /api/v1/stats</h3>
-  <p>Get platform-wide statistics</p>
-  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/stats</div>
-  <div class="code-block"><pre>{
-  "users": 5000,
-  "posts": 25000,
-  "comments": 75000
-}</pre></div>
+}</pre>
+  </div>
 </div>
 
 <div class="section">
-  <h2>Rate Limits</h2>
-  <ul>
-    <li>1000 requests per day per API key</li>
-    <li>60 requests per minute</li>
-    <li>100 posts maximum per request</li>
-  </ul>
-  <p>Rate limit information is included in response headers.</p>
+  <h3>Get total user count</h3>
+  <div class="endpoint">GET /api/usercount</div>
+  <p>
+    Returns the total number of registered users. 
+  </p>
+
+  <div class="code-block">
+    <pre>{
+  "count": "1234"
+}</pre>
+  </div>
 </div>
 
 <div class="section">
-  <h2>Example Usage</h2>
-  <div class="code-block"><pre>const response = await fetch('https://txt-ctgm.onrender.com/api/v1/posts', {
-  headers: {
-    'X-API-Key': 'txt_your_api_key_here'
-  }
-});
-
-const data = await response.json();
-console.log(data.posts);</pre></div>
+  <h2>Notes before use:</h2>
+  <p class="stats">
+    This API is provided for experimentation and personal projects. The APIs used are REST APIs. 
+    There is no guarantee of long-term stability or support. 
+    Heavy scraping or abuse <strong>may</strong> be rate-limited or blocked, as with all REST APIs do.
+  </p>
 </div>
 
-<div class="section">
-  <h2>Support</h2>
-  <p>Questions? Found a bug? <a href="/compose">Send us a message at the username "auth"</a> or report it through skunkolee(at)gmail(dot)com.</p>
-</div>
-
-</div>
-
-  <div class="footer">
+<p>You can see the APIs in action here:
+  <a href="https://txt-ctgm.onrender.com/api/posts">/api/posts</a><br>
+  <a href="https://txt-ctgm.onrender.com/api/profile/auth">/api/profile/:nickname</a><br>
+  <a href="https://txt-ctgm.onrender.com/api/usercount">/api/usercount</a>
+</p>
+  
+<div class="footer">
   <a href="/privacy">privacy policy</a>
   <a href="/terms">terms of service</a>
   <a href="/license">license</a>
   <a href="https://txt1.statuspage.io/" target="_blank">status</a>
 </div>
-  
-<script>
-if(!localStorage.getItem("nickname")){
-  location.href="/"
-}
-
-const nickname = localStorage.getItem("nickname")
-
-async function loadKeys(){
-  const r = await fetch(`/api/keys/${nickname}`)
-  const data = await r.json()
-  
-  const container = document.getElementById('keys-container')
-  
-  if(data.keys.length === 0){
-    container.innerHTML = '<p class="stats">No API keys yet. Create one to get started!</p>'
-    return
-  }
-  
-  container.innerHTML = ''
-  
-  data.keys.forEach(key => {
-    const card = document.createElement('div')
-    card.className = 'key-card'
-    
-    const date = new Date(key.created_at).toLocaleDateString()
-    const lastUsed = key.last_used ? new Date(key.last_used).toLocaleDateString() : 'Never'
-    
-    card.innerHTML = `
-      <h3>${key.name}</h3>
-      <div class="key-value">${key.key}</div>
-      <div class="stats">
-        <p>Created: ${date}</p>
-        <p>Last used: ${lastUsed}</p>
-        <p>Requests today: ${key.requests_today}/1000</p>
-      </div>
-      <button class="danger" onclick="deleteKey('${key.key}')">Delete Key</button>
-    `
-    
-    container.appendChild(card)
-  })
-}
-
-async function createKey(){
-  const nameInput = document.getElementById('key-name')
-  const name = nameInput.value.trim()
-  
-  if(!name){
-    alert('Please enter a name for your API key')
-    return
-  }
-  
-  const r = await fetch('/api/keys/create', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({nickname, name})
-  })
-  
-  if(r.status === 400){
-    const data = await r.json()
-    alert(data.error || 'Error creating key')
-    return
-  }
-  
-  if(!r.ok){
-    alert('Error creating API key')
-    return
-  }
-  
-  nameInput.value = ''
-  await loadKeys()
-  alert('API key created! Make sure to copy it now.')
-}
-
-async function deleteKey(key){
-  if(!confirm('Delete this API key? This cannot be undone.')){
-    return
-  }
-  
-  const r = await fetch(`/api/keys/${key}`, {
-    method: 'DELETE',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({nickname})
-  })
-  
-  if(!r.ok){
-    alert('Error deleting key')
-    return
-  }
-  
-  await loadKeys()
-}
-
-loadKeys()
-</script>
 </body>
 </html>
