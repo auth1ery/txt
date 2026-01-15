@@ -479,9 +479,7 @@ app.get("/api/v1/stats", validateApiKey, apiLimiter, async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`server running on port ${PORT}`)
-})LEFT JOIN reactions r ON p.id = r.post_id
-    WHERE p.nickname = $1
-  `, [nick])
+}) [nick])
   
   const upvotes = Number(reactionsResult.rows[0].upvotes) || 0
   const downvotes = Number(reactionsResult.rows[0].downvotes) || 0
@@ -831,3 +829,6 @@ app.get("/api/v1/users/:nickname", validateApiKey, apiLimiter, async (req, res) 
       SUM(CASE WHEN r.value = 1 THEN 1 ELSE 0 END) as upvotes,
       SUM(CASE WHEN r.value = -1 THEN 1 ELSE 0 END) as downvotes
     FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+    WHERE p.nickname = $1
+  `,
