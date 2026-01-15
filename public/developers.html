@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>developers - txt</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:800px;margin:auto;padding:1rem}
+textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
+button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+button.danger{color:#c44}
+button.danger:hover{border-color:#c44}
+.key-card{border:1px solid #222;padding:1rem;margin:1rem 0;border-radius:.25rem}
+.key-value{background:#1a1a1a;padding:.5rem;border-radius:.25rem;font-family:monospace;word-break:break-all;margin:.5rem 0}
+.section{margin:2rem 0;padding:1rem 0;border-bottom:1px solid #222}
+.endpoint{background:#1a1a1a;padding:.5rem;margin:.5rem 0;border-left:3px solid #4c4;font-family:monospace;font-size:.9rem}
+.code-block{background:#1a1a1a;padding:1rem;border-radius:.25rem;overflow-x:auto;font-family:monospace;font-size:.85rem;margin:1rem 0}
+pre{margin:0}
+a{color:#4c4;text-decoration:none}
+a:hover{text-decoration:underline}
+.stats{color:#777;font-size:.85rem}
+.back-btn{margin-bottom:1rem}
+h1{color:#4c4}
+h2{color:#eaeaea;margin-top:2rem}
+h3{color:#aaa}
+</style>
+</head>
+<body>
+<div id="app">
+<button class="back-btn" onclick="location.href='/feed'">← back to feed</button>
+
+<h1>API Documentation</h1>
+<p>Build apps and integrations with txt's public API. Get started by creating an API key below.</p>
+
+<div class="section">
+  <h2>Your API Keys</h2>
+  <div id="keys-container"></div>
+  
+  <div style="margin-top:1rem">
+    <input type="text" id="key-name" placeholder="API key name (e.g. 'My App')" maxlength="50">
+    <button onclick="createKey()">Create API Key</button>
+    <p class="stats">Maximum 3 keys per account. Each key has a limit of 1000 requests per day.</p>
+  </div>
+</div>
+
+<div class="section">
+  <h2>Authentication</h2>
+  <p>Include your API key in the <code>X-API-Key</code> header with every request:</p>
+  <div class="code-block"><pre>X-API-Key: txt_your_api_key_here</pre></div>
+</div>
+
+<div class="section">
+  <h2>Endpoints</h2>
+  
+  <h3>GET /api/v1/posts</h3>
+  <p>Get a list of posts with pagination</p>
+  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/posts?limit=20&offset=0</div>
+  <div class="code-block"><pre>{
+  "posts": [
+    {
+      "id": 123,
+      "nickname": "user",
+      "content": "hello world",
+      "created_at": 1234567890,
+      "score": 5
+    }
+  ],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "count": 20
+  }
+}</pre></div>
+  
+  <h3>GET /api/v1/posts/:id</h3>
+  <p>Get a single post with its comments</p>
+  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/posts/123</div>
+  <div class="code-block"><pre>{
+  "post": {
+    "id": 123,
+    "nickname": "user",
+    "content": "hello world",
+    "created_at": 1234567890,
+    "score": 5
+  },
+  "comments": [
+    {
+      "id": 456,
+      "post_id": 123,
+      "nickname": "commenter",
+      "content": "nice post",
+      "created_at": 1234567900
+    }
+  ]
+}</pre></div>
+
+  <h3>GET /api/v1/users/:nickname</h3>
+  <p>Get a user's profile information</p>
+  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/users/username</div>
+  <div class="code-block"><pre>{
+  "nickname": "username",
+  "created_at": 1234567890,
+  "bio": "just vibing",
+  "status": "online",
+  "timezone": "UTC",
+  "pronouns": "they/them",
+  "stats": {
+    "posts": 42,
+    "comments": 100,
+    "joinNumber": 1337,
+    "upvotes": 200,
+    "downvotes": 10
+  }
+}</pre></div>
+
+  <h3>GET /api/v1/users/:nickname/posts</h3>
+  <p>Get all posts by a specific user</p>
+  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/users/username/posts?limit=20&offset=0</div>
+  <div class="code-block"><pre>{
+  "posts": [...],
+  "pagination": {
+    "limit": 20,
+    "offset": 0,
+    "count": 20
+  }
+}</pre></div>
+
+  <h3>GET /api/v1/stats</h3>
+  <p>Get platform-wide statistics</p>
+  <div class="endpoint">GET https://txt-ctgm.onrender.com/api/v1/stats</div>
+  <div class="code-block"><pre>{
+  "users": 5000,
+  "posts": 25000,
+  "comments": 75000
+}</pre></div>
+</div>
+
+<div class="section">
+  <h2>Rate Limits</h2>
+  <ul>
+    <li>1000 requests per day per API key</li>
+    <li>60 requests per minute</li>
+    <li>100 posts maximum per request</li>
+  </ul>
+  <p>Rate limit information is included in response headers.</p>
+</div>
+
+<div class="section">
+  <h2>Example Usage</h2>
+  <div class="code-block"><pre>const response = await fetch('https://txt-ctgm.onrender.com/api/v1/posts', {
+  headers: {
+    'X-API-Key': 'txt_your_api_key_here'
+  }
+});
+
+const data = await response.json();
+console.log(data.posts);</pre></div>
+</div>
+
+<div class="section">
+  <h2>Support</h2>
+  <p>Questions? Found a bug? <a href="/compose">Send us a message at the username "auth"</a> or report it through skunkolee(at)gmail(dot)com.</p>
+</div>
+
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname = localStorage.getItem("nickname")
+
+async function loadKeys(){
+  const r = await fetch(`/api/keys/${nickname}`)
+  const data = await r.json()
+  
+  const container = document.getElementById('keys-container')
+  
+  if(data.keys.length === 0){
+    container.innerHTML = '<p class="stats">No API keys yet. Create one to get started!</p>'
+    return
+  }
+  
+  container.innerHTML = ''
+  
+  data.keys.forEach(key => {
+    const card = document.createElement('div')
+    card.className = 'key-card'
+    
+    const date = new Date(key.created_at).toLocaleDateString()
+    const lastUsed = key.last_used ? new Date(key.last_used).toLocaleDateString() : 'Never'
+    
+    card.innerHTML = `
+      <h3>${key.name}</h3>
+      <div class="key-value">${key.key}</div>
+      <div class="stats">
+        <p>Created: ${date}</p>
+        <p>Last used: ${lastUsed}</p>
+        <p>Requests today: ${key.requests_today}/1000</p>
+      </div>
+      <button class="danger" onclick="deleteKey('${key.key}')">Delete Key</button>
+    `
+    
+    container.appendChild(card)
+  })
+}
+
+async function createKey(){
+  const nameInput = document.getElementById('key-name')
+  const name = nameInput.value.trim()
+  
+  if(!name){
+    alert('Please enter a name for your API key')
+    return
+  }
+  
+  const r = await fetch('/api/keys/create', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname, name})
+  })
+  
+  if(r.status === 400){
+    const data = await r.json()
+    alert(data.error || 'Error creating key')
+    return
+  }
+  
+  if(!r.ok){
+    alert('Error creating API key')
+    return
+  }
+  
+  nameInput.value = ''
+  await loadKeys()
+  alert('API key created! Make sure to copy it now.')
+}
+
+async function deleteKey(key){
+  if(!confirm('Delete this API key? This cannot be undone.')){
+    return
+  }
+  
+  const r = await fetch(`/api/keys/${key}`, {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname})
+  })
+  
+  if(!r.ok){
+    alert('Error deleting key')
+    return
+  }
+  
+  await loadKeys()
+}
+
+loadKeys()
+</script>
+</body>
+</html>
