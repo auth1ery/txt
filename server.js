@@ -5,6 +5,7 @@ import { fileURLToPath } from "url"
 import { containsProfanity } from "./filter.js"
 import rateLimit from "express-rate-limit"
 import sanitizeHtml from "sanitize-html"
+import crypto from "crypto"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -38,6 +39,12 @@ const authLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 5,
   message: { error: "Too many login attempts, try again later" }
+})
+
+const apiLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  max: 60,
+  message: { error: "API rate limit exceeded" }
 })
 
 app.use(express.json())
@@ -88,6 +95,10 @@ app.get("/settings", (req, res) => {
 
 app.get("/license", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "licenseview.html"))
+})
+
+app.get("/developers", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "developers.html"))
 })
 
 app.use(express.static("public"))
@@ -148,6 +159,15 @@ async function initDB() {
       read BOOLEAN DEFAULT FALSE,
       is_broadcast BOOLEAN DEFAULT FALSE
     );
+    CREATE TABLE IF NOT EXISTS api_keys (
+      key TEXT PRIMARY KEY,
+      nickname TEXT,
+      name TEXT,
+      created_at BIGINT,
+      last_used BIGINT,
+      requests_today INTEGER DEFAULT 0,
+      last_reset BIGINT
+    );
     
     DO $$ 
     BEGIN
@@ -183,6 +203,58 @@ async function checkBan(nickname) {
     return null
   }
   return ban
+}
+
+function generateApiKey() {
+  return 'txt_' + Array.from(crypto.randomBytes(24))
+    .map(b => b.toString(16).padStart(2, '0'))
+    .join('')
+}
+
+async function validateApiKey(req, res, next) {
+  const apiKey = req.headers['x-api-key']
+  
+  if (!apiKey) {
+    return res.status(401).json({ error: "API key required" })
+  }
+  
+  try {
+    const result = await pool.query(
+      "SELECT * FROM api_keys WHERE key = $1",
+      [apiKey]
+    )
+    
+    if (result.rows.length === 0) {
+      return res.status(401).json({ error: "Invalid API key" })
+    }
+    
+    const key = result.rows[0]
+    const now = Date.now()
+    const dayInMs = 24 * 60 * 60 * 1000
+    
+    if (now - key.last_reset > dayInMs) {
+      await pool.query(
+        "UPDATE api_keys SET requests_today = 0, last_reset = $1 WHERE key = $2",
+        [now, apiKey]
+      )
+      key.requests_today = 0
+    }
+    
+    if (key.requests_today >= 1000) {
+      return res.status(429).json({ error: "Daily rate limit exceeded" })
+    }
+    
+    await pool.query(
+      "UPDATE api_keys SET last_used = $1, requests_today = requests_today + 1 WHERE key = $2",
+      [now, apiKey]
+    )
+    
+    req.apiUser = key.nickname
+    next()
+  } catch (error) {
+    console.error(error)
+    res.status(500).json({ error: "Internal server error" })
+  }
 }
 
 app.post("/api/check-ban", async (req, res) => {
@@ -345,6 +417,69 @@ app.get("/api/profile/:nick", async (req, res) => {
       SUM(CASE WHEN r.value = -1 THEN 1 ELSE 0 END) as downvotes
     FROM posts p
     LEFT JOIN reactions r ON p.id = r.post_id
+    WHERE p.nickname = $1
+  `, [nick])
+  
+  const upvotes = Number(reactionsResult.rows[0].upvotes) || 0
+  const downvotes = Number(reactionsResult.rows[0].downvotes) || 0
+  
+  res.json({
+    nickname: nick,
+    created_at: userResult.rows[0].created_at,
+    bio: userResult.rows[0].bio || '',
+    status: userResult.rows[0].status || '',
+    timezone: userResult.rows[0].timezone || 'UTC',
+    pronouns: userResult.rows[0].pronouns || '',
+    stats: {
+      posts: postsResult.rows[0].c,
+      comments: commentsResult.rows[0].c,
+      joinNumber: joinNumberResult.rows[0].num,
+      upvotes,
+      downvotes
+    }
+  })
+})
+
+app.get("/api/v1/users/:nickname/posts", validateApiKey, apiLimiter, async (req, res) => {
+  const nick = req.params.nickname.toLowerCase()
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100)
+  const offset = parseInt(req.query.offset) || 0
+  
+  const result = await pool.query(`
+    SELECT p.*, COALESCE(SUM(r.value), 0) as score
+    FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+    WHERE p.nickname = $1
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
+    LIMIT $2 OFFSET $3
+  `, [nick, limit, offset])
+  
+  res.json({ 
+    posts: result.rows,
+    pagination: {
+      limit,
+      offset,
+      count: result.rows.length
+    }
+  })
+})
+
+app.get("/api/v1/stats", validateApiKey, apiLimiter, async (req, res) => {
+  const userCount = await pool.query("SELECT COUNT(*) as c FROM users")
+  const postCount = await pool.query("SELECT COUNT(*) as c FROM posts")
+  const commentCount = await pool.query("SELECT COUNT(*) as c FROM comments")
+  
+  res.json({
+    users: userCount.rows[0].c,
+    posts: postCount.rows[0].c,
+    comments: commentCount.rows[0].c
+  })
+})
+
+app.listen(PORT, () => {
+  console.log(`server running on port ${PORT}`)
+})LEFT JOIN reactions r ON p.id = r.post_id
     WHERE p.nickname = $1
   `, [nick])
   
@@ -577,6 +712,122 @@ app.post("/api/admin/broadcast", async (req, res) => {
   res.sendStatus(200)
 })
 
-app.listen(PORT, () => {
-  console.log(`server running on port ${PORT}`)
+app.post("/api/keys/create", async (req, res) => {
+  const { nickname, name } = req.body
+  if (!nickname || !name) return res.sendStatus(400)
+  if (name.length > 50) return res.sendStatus(400)
+  
+  const userResult = await pool.query("SELECT * FROM users WHERE nickname = $1", [nickname.toLowerCase()])
+  if (userResult.rows.length === 0) return res.sendStatus(404)
+  
+  const existingKeys = await pool.query("SELECT COUNT(*) as c FROM api_keys WHERE nickname = $1", [nickname.toLowerCase()])
+  if (existingKeys.rows[0].c >= 3) {
+    return res.status(400).json({ error: "Maximum 3 API keys per user" })
+  }
+  
+  const key = generateApiKey()
+  const now = Date.now()
+  
+  await pool.query(
+    "INSERT INTO api_keys(key, nickname, name, created_at, last_used, last_reset) VALUES($1, $2, $3, $4, $5, $6)",
+    [key, nickname.toLowerCase(), name, now, now, now]
+  )
+  
+  res.json({ key, name, created_at: now })
 })
+
+app.get("/api/keys/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  
+  const result = await pool.query(
+    "SELECT key, name, created_at, last_used, requests_today FROM api_keys WHERE nickname = $1 ORDER BY created_at DESC",
+    [nickname]
+  )
+  
+  res.json({ keys: result.rows })
+})
+
+app.delete("/api/keys/:key", async (req, res) => {
+  const { key } = req.params
+  const { nickname } = req.body
+  
+  if (!nickname) return res.sendStatus(400)
+  
+  const result = await pool.query(
+    "DELETE FROM api_keys WHERE key = $1 AND nickname = $2",
+    [key, nickname.toLowerCase()]
+  )
+  
+  if (result.rowCount === 0) {
+    return res.status(404).json({ error: "Key not found" })
+  }
+  
+  res.sendStatus(200)
+})
+
+app.get("/api/v1/posts", validateApiKey, apiLimiter, async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 20, 100)
+  const offset = parseInt(req.query.offset) || 0
+  
+  const result = await pool.query(`
+    SELECT p.*, COALESCE(SUM(r.value), 0) as score
+    FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
+    LIMIT $1 OFFSET $2
+  `, [limit, offset])
+  
+  res.json({ 
+    posts: result.rows,
+    pagination: {
+      limit,
+      offset,
+      count: result.rows.length
+    }
+  })
+})
+
+app.get("/api/v1/posts/:id", validateApiKey, apiLimiter, async (req, res) => {
+  const id = req.params.id
+  
+  const postResult = await pool.query(`
+    SELECT p.*, COALESCE(SUM(r.value), 0) as score
+    FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+    WHERE p.id = $1
+    GROUP BY p.id
+  `, [id])
+  
+  if (postResult.rows.length === 0) return res.sendStatus(404)
+  
+  const commentsResult = await pool.query(
+    "SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at ASC",
+    [id]
+  )
+  
+  res.json({
+    post: postResult.rows[0],
+    comments: commentsResult.rows
+  })
+})
+
+app.get("/api/v1/users/:nickname", validateApiKey, apiLimiter, async (req, res) => {
+  const nick = req.params.nickname.toLowerCase()
+  
+  const userResult = await pool.query("SELECT * FROM users WHERE nickname = $1", [nick])
+  if (userResult.rows.length === 0) return res.sendStatus(404)
+  
+  const postsResult = await pool.query("SELECT COUNT(*) as c FROM posts WHERE nickname = $1", [nick])
+  const commentsResult = await pool.query("SELECT COUNT(*) as c FROM comments WHERE nickname = $1", [nick])
+  
+  const joinNumberResult = await pool.query(
+    "SELECT COUNT(*) as num FROM users WHERE created_at <= $1",
+    [userResult.rows[0].created_at]
+  )
+  
+  const reactionsResult = await pool.query(`
+    SELECT 
+      SUM(CASE WHEN r.value = 1 THEN 1 ELSE 0 END) as upvotes,
+      SUM(CASE WHEN r.value = -1 THEN 1 ELSE 0 END) as downvotes
+    FROM posts p
