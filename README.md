@@ -19,6 +19,7 @@ its very small in size of the source code and the backend is built to use as lit
 - reporting system
 - inboxes
 - email system
+- html, css, and js sanitization
 
 # install
 
