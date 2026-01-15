@@ -53,7 +53,7 @@ a:hover{color:#fff}
   <a href="/developers">API</a>
   <a href="https://txt1.statuspage.io/" target="_blank">status</a>
 </div>
-  
+
 <script>
 if(!localStorage.getItem("nickname")){
   location.href="/"
@@ -268,6 +268,7 @@ async function load(){
   const d=await r.json()
   const el=document.getElementById("posts")
   d.posts.forEach(p=>{
+    const commentCount = d.comments.filter(c=>c.post_id===p.id).length
     const div=document.createElement("div")
     div.className="post"
     div.dataset.postId=p.id
@@ -278,7 +279,7 @@ async function load(){
         <span>score: <span id="score${p.id}">${p.score}</span></span>
         <button onclick="react(${p.id},1)">+</button>
         <button onclick="react(${p.id},-1)">-</button>
-        <button onclick="togglecomments(${p.id})">comments</button>
+        <button onclick="togglecomments(${p.id})">comments (${commentCount})</button>
         <div class="menu">
           <button class="dots" onclick="toggleMenu(${p.id})">⋯</button>
           <div id="menu${p.id}" class="dropdown">
@@ -366,6 +367,12 @@ async function sendcomment(post_id){
   const div=createcommentdiv({nickname,content:input.value,created_at:Date.now(),id:data.id,post_id})
   document.getElementById("comments"+post_id).appendChild(div)
   document.getElementById("comments"+post_id).classList.remove("hidden")
+  
+  const btn = document.querySelector(`[data-post-id="${post_id}"] button[onclick*="togglecomments"]`)
+  if(btn){
+    const currentCount = parseInt(btn.textContent.match(/\d+/)[0])
+    btn.textContent = `comments (${currentCount + 1})`
+  }
 }
 
 function showreply(comment_id,post_id){
@@ -395,6 +402,12 @@ async function sendreply(post_id,parent_id){
   document.querySelector(`#comments${post_id}`).appendChild(div)
   input.value=""
   document.querySelector(`#comments${post_id}`).classList.remove("hidden")
+  
+  const btn = document.querySelector(`[data-post-id="${post_id}"] button[onclick*="togglecomments"]`)
+  if(btn){
+    const currentCount = parseInt(btn.textContent.match(/\d+/)[0])
+    btn.textContent = `comments (${currentCount + 1})`
+  }
 }
 
 async function deleteaccount(){
