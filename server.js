@@ -9,6 +9,7 @@ import sanitizeHtml from "sanitize-html"
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
 const app = express()
+app.use(express.json())
 const PORT = process.env.PORT || 3000
 
 const pool = new pg.Pool({
@@ -179,6 +180,9 @@ async function initDB() {
       END IF;
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='pronouns') THEN
         ALTER TABLE users ADD COLUMN pronouns TEXT DEFAULT '';
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='rng_linked') THEN
+        ALTER TABLE users ADD COLUMN rng_linked BOOLEAN DEFAULT FALSE;
       END IF;
     END $$;
   `)
