@@ -574,6 +574,21 @@ app.post("/api/messages", postLimiter, async (req, res) => {
   res.sendStatus(200)
 })
 
+app.post("/api/rng-create-token", async (req, res) => {
+  const { token } = req.body
+  
+  if (!token || token.length < 10) {
+    return res.status(400).json({ error: "Invalid token" })
+  }
+  
+  await pool.query(
+    "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2)",
+    [token, Date.now()]
+  )
+  
+  res.json({ success: true })
+})
+
 app.post("/api/rng-link", async (req, res) => {
   const { nickname, token } = req.body
 
