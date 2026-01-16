@@ -375,7 +375,7 @@ app.get("/api/profile/:nick", async (req, res) => {
     controversyScore,
     upvotes,
     downvotes,
-    lastPost: lastPostResult.rows[0] || null
+    lastPost: lastPostResult.rows[0] || null,
 
     rngLinked: userResult.rows[0].rng_linked || false
   })
