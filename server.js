@@ -100,12 +100,6 @@ const pendingTokens = Object.create(null)
 app.get("/verify-rng", async (req, res) => {
   const { token } = req.query
   if (!token) return res.status(400).send("Missing token")
-
-  await pool.query(
-    "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2) ON CONFLICT DO NOTHING",
-    [token, Date.now()]
-  )
-
   res.sendFile(path.join(__dirname, "public", "verify-rng.html"))
 })
 
