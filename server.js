@@ -596,6 +596,11 @@ app.post("/api/rng-link", async (req, res) => {
     return res.status(400).json({ error: "Missing data" })
   }
 
+  await pool.query(
+    "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2) ON CONFLICT (token) DO NOTHING",
+    [token, Date.now()]
+  )
+
   const tokenCheck = await pool.query(
     "SELECT 1 FROM rng_tokens WHERE token = $1",
     [token]
