@@ -34,7 +34,7 @@ const token = urlParams.get("token")
 const contentEl = document.getElementById("content")
 
 async function checkLogin() {
-  const nickname = localStorage.getItem("txt_nickname")
+  const nickname = localStorage.getItem("nickname")
   
   if(!token) {
     contentEl.innerHTML = '<p class="error">Error: No token provided</p><p>Please try linking again from auth\'s RNG.</p>'
