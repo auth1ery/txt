@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>txt</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;display:flex;align-items:center;justify-content:center;min-height:100vh}
+#container{max-width:500px;padding:2rem;text-align:center}
+h1{font-size:3rem;margin:0;letter-spacing:-2px}
+p{color:#aaa;line-height:1.6;margin:1.5rem 0}
+hr{border:none;border-top:1px solid #222;margin:2rem 0}
+</style>
+</head>
+<body>
+<div id="container">
+<h2>verify with auth's RNG</h2>
+<p>click the button below to confirm linking with auth’s RNG.</p>
+<button id="confirm-link">confirm link</button>
+
+<script>
+const urlParams = new URLSearchParams(window.location.search)
+const token = urlParams.get("token")
+
+const username = prompt("Enter your txt username to confirm:")
+
+document.getElementById("confirm-link").addEventListener("click", async () => {
+  if(!username || !token) return alert("Missing info!")
+
+  try {
+    const res = await fetch("/api/rng-link", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({ nickname: username, token })
+    })
+    if(res.ok){
+      alert("RNG account linked successfully!")
+      window.location.href = "https://authsrng.neocities.org"
+    } else {
+      alert("Error linking account")
+    }
+  } catch(e){
+    console.error(e)
+    alert("Network error")
+  }
+})
+</script>
+</body>
+</html>
