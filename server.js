@@ -557,6 +557,21 @@ app.post("/api/messages", postLimiter, async (req, res) => {
   res.sendStatus(200)
 })
 
+app.post("/api/rng-link", async (req, res) => {
+  const { nickname, token } = req.body
+
+  if(!pendingTokens[token]) return res.status(400).json({ error: "Invalid or expired token" })
+
+  await pool.query(
+    "UPDATE users SET rng_linked = TRUE WHERE nickname = $1",
+    [nickname.toLowerCase()]
+  )
+
+  delete pendingTokens[token]
+
+  res.sendStatus(200)
+})
+
 app.post("/api/messages/read/:id", async (req, res) => {
   const id = req.params.id
   await pool.query("UPDATE messages SET read = TRUE WHERE id = $1", [id])
