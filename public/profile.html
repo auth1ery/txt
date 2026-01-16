@@ -43,6 +43,7 @@ a:hover{color:#fff}
 <div>
 <h2 id="nickname"></h2>
 <span id="pronouns" class="pronouns"></span>
+<span id="rng-badge" class="join-badge" style="display:none">auth’s RNG linked!</span>
 <div class="menu">
 <button class="dots" onclick="toggleMenu()">⋯</button>
 <div id="menu" class="dropdown">
@@ -165,6 +166,10 @@ if(nick){
     })
     .then(d=>{
       document.getElementById("nickname").textContent="@"+d.nickname
+
+      if(d.rngLinked){
+        document.getElementById("rng-badge").style.display = "inline-block"
+      }
       
       const date=new Date(Number(d.created_at))
       document.getElementById("join").innerHTML=`joined: ${date.toDateString()} <span class="join-badge">user #${d.joinNumber}</span>`
