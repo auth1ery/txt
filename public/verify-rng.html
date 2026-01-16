@@ -6,43 +6,137 @@
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;display:flex;align-items:center;justify-content:center;min-height:100vh}
 #container{max-width:500px;padding:2rem;text-align:center}
-h1{font-size:3rem;margin:0;letter-spacing:-2px}
+h2{font-size:2rem;margin:0 0 1rem 0;letter-spacing:-1px}
 p{color:#aaa;line-height:1.6;margin:1.5rem 0}
-hr{border:none;border-top:1px solid #222;margin:2rem 0}
+.user-badge{background:#1a1a1a;border:1px solid #333;padding:1rem;border-radius:8px;margin:1.5rem 0;display:inline-block}
+.user-badge strong{color:#007bff}
+button{background:#007bff;color:white;border:none;padding:0.75rem 2rem;border-radius:4px;cursor:pointer;font-size:1rem;margin-top:1rem}
+button:hover{background:#0056b3}
+button:disabled{background:#555;cursor:not-allowed}
+button.create-account{background:#28a745}
+button.create-account:hover{background:#1e7e34}
+.error{color:#ff6b6b;margin-top:1rem}
+.success{color:#51cf66;margin-top:1rem}
+.warning{color:#ffa500;margin-top:1rem}
+.loading{color:#888;font-style:italic}
 </style>
 </head>
 <body>
 <div id="container">
 <h2>verify with auth's RNG</h2>
-<p>click the button below to confirm linking with auth’s RNG.</p>
-<button id="confirm-link">confirm link</button>
-
+<div id="content">
+  <p class="loading">checking your login status...</p>
+</div>
+</div>
 <script>
 const urlParams = new URLSearchParams(window.location.search)
 const token = urlParams.get("token")
+const contentEl = document.getElementById("content")
 
-const username = prompt("Enter your txt username to confirm:")
+async function checkLogin() {
+  const nickname = localStorage.getItem("txt_nickname")
+  
+  if(!token) {
+    contentEl.innerHTML = `
+      <p class="error">Error: No token provided</p>
+      <p>Please try linking again from auth's RNG.</p>
+    `
+    return
+  }
+  
+  if(!nickname) {
+    contentEl.innerHTML = `
+      <div class="user-badge">signed in as: <strong>nobody</strong></div>
+      <p class="warning">you need a txt account to link with auth's RNG.</p>
+      <button class="create-account" onclick="window.location.href='/feed'">create account / login</button>
+    `
+  } else {
+    try {
+      const profileRes = await fetch(\`/api/profile/\${nickname}\`)
+      
+      if(!profileRes.ok) {
+        // User doesn't exist anymore
+        localStorage.removeItem("txt_nickname")
+        contentEl.innerHTML = `
+          <div class="user-badge">signed in as: <strong>nobody</strong></div>
+          <p class="warning">your account no longer exists. please create a new one.</p>
+          <button class="create-account" onclick="window.location.href='/feed'">create account / login</button>
+        `
+        return
+      }
+      
+      const profile = await profileRes.json()
+      
+      // Check if already linked
+      if(profile.rngLinked) {
+        contentEl.innerHTML = `
+          <div class="user-badge">signed in as: <strong>${nickname}</strong></div>
+          <p class="success">your account is already linked with auth's RNG!</p>
+          <button onclick="window.location.href='https://authsrng.neocities.org'">return to RNG</button>
+        `
+        return
+      }
+      
+      // Show confirmation
+      contentEl.innerHTML = `
+        <div class="user-badge">signed in as: <strong>${nickname}</strong></div>
+        <p>click the button below to confirm linking with auth's RNG.</p>
+        <button id="confirm-link">confirm link</button>
+        <div id="message"></div>
+      `
+      
+      document.getElementById("confirm-link").addEventListener("click", handleLink)
+      
+    } catch(e) {
+      console.error(e)
+      contentEl.innerHTML = `
+        <p class="error">Error checking account status</p>
+        <button onclick="location.reload()">try again</button>
+      `
+    }
+  }
+}
 
-document.getElementById("confirm-link").addEventListener("click", async () => {
-  if(!username || !token) return alert("Missing info!")
-
+async function handleLink() {
+  const nickname = localStorage.getItem("txt_nickname")
+  const button = document.getElementById("confirm-link")
+  const messageEl = document.getElementById("message")
+  
+  button.disabled = true
+  button.textContent = "linking..."
+  messageEl.textContent = ""
+  
   try {
     const res = await fetch("/api/rng-link", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
-      body: JSON.stringify({ nickname: username, token })
+      body: JSON.stringify({ nickname, token })
     })
-    if(res.ok){
-      alert("RNG account linked successfully!")
-      window.location.href = "https://authsrng.neocities.org"
+    
+    const data = await res.json().catch(() => ({}))
+    
+    if(res.ok) {
+      messageEl.textContent = "RNG account linked successfully! Redirecting..."
+      messageEl.className = "success"
+      setTimeout(() => {
+        window.location.href = "https://authsrng.neocities.org"
+      }, 1500)
     } else {
-      alert("Error linking account")
+      messageEl.textContent = data.error || "Error linking account"
+      messageEl.className = "error"
+      button.disabled = false
+      button.textContent = "confirm link"
     }
-  } catch(e){
+  } catch(e) {
     console.error(e)
-    alert("Network error")
+    messageEl.textContent = "Network error. Please try again."
+    messageEl.className = "error"
+    button.disabled = false
+    button.textContent = "confirm link"
   }
-})
+}
+
+checkLogin()
 </script>
 </body>
 </html>
