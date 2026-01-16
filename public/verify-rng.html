@@ -9,16 +9,16 @@ body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;
 h2{font-size:2rem;margin:0 0 1rem 0;letter-spacing:-1px}
 p{color:#aaa;line-height:1.6;margin:1.5rem 0}
 .user-badge{background:#1a1a1a;border:1px solid #333;padding:1rem;border-radius:8px;margin:1.5rem 0;display:inline-block}
-.user-badge strong{color:#007bff}
-button{background:#007bff;color:white;border:none;padding:0.75rem 2rem;border-radius:4px;cursor:pointer;font-size:1rem;margin-top:1rem}
-button:hover{background:#0056b3}
-button:disabled{background:#555;cursor:not-allowed}
-button.create-account{background:#28a745}
-button.create-account:hover{background:#1e7e34}
-.error{color:#ff6b6b;margin-top:1rem}
-.success{color:#51cf66;margin-top:1rem}
-.warning{color:#ffa500;margin-top:1rem}
-.loading{color:#888;font-style:italic}
+.user-badge strong{color:#888}
+button{background:#222;color:#aaa;border:1px solid #333;padding:0.75rem 2rem;border-radius:4px;cursor:pointer;font-size:1rem;margin-top:1rem}
+button:hover{background:#2a2a2a;border-color:#444;color:#eaeaea}
+button:disabled{background:#1a1a1a;cursor:not-allowed;color:#555}
+button.create-account{background:#222;border-color:#333}
+button.create-account:hover{background:#2a2a2a;border-color:#444}
+.error{color:#c44;margin-top:1rem}
+.success{color:#888;margin-top:1rem}
+.warning{color:#999;margin-top:1rem}
+.loading{color:#666;font-style:italic}
 </style>
 </head>
 <body>
@@ -66,7 +66,7 @@ async function checkLogin() {
       
       // Check if already linked
       if(profile.rngLinked) {
-        contentEl.innerHTML = '<div class="user-badge">signed in as: <strong>' + nickname + '</strong></div><p class="success">your account is already linked with auth\'s RNG!</p><button onclick="window.location.href=\'https://authsrng.neocities.org\'">return to RNG</button>'
+        contentEl.innerHTML = '<div class="user-badge">signed in as: <strong>' + nickname + '</strong></div><p class="success">your account is already linked with auth\'s RNG!</p><button onclick="window.location.href=\'https://authsrng.neocities.org\'">return</button>'
         return
       }
       
@@ -111,7 +111,7 @@ async function handleLink() {
     }
     
     if(res.ok) {
-      messageEl.textContent = "RNG account linked successfully! Redirecting..."
+      messageEl.textContent = "txt > auth's RNG linked successfully! Redirecting..."
       messageEl.className = "success"
       setTimeout(function() {
         window.location.href = "https://authsrng.neocities.org"
