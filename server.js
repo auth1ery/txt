@@ -97,14 +97,14 @@ app.get("/developers", (req, res) => {
 
 const pendingTokens = Object.create(null)
 
-app.get("/verify-rng", (req, res) => {
+app.get("/verify-rng", async (req, res) => {
   const { token } = req.query
   if (!token) return res.status(400).send("Missing token")
 
-await pool.query(
-  "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2) ON CONFLICT DO NOTHING",
-  [token, Date.now()]
-)
+  await pool.query(
+    "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2) ON CONFLICT DO NOTHING",
+    [token, Date.now()]
+  )
 
   res.sendFile(path.join(__dirname, "public", "verify-rng.html"))
 })
@@ -167,7 +167,12 @@ async function initDB() {
       read BOOLEAN DEFAULT FALSE,
       is_broadcast BOOLEAN DEFAULT FALSE
     );
-    
+
+    CREATE TABLE IF NOT EXISTS rng_tokens (
+    token TEXT PRIMARY KEY,
+    created_at BIGINT
+  );
+
     DO $$ 
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='bio') THEN
