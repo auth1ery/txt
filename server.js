@@ -596,35 +596,41 @@ app.post("/api/rng-link", async (req, res) => {
     return res.status(400).json({ error: "Missing data" })
   }
 
-  await pool.query(
-    "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2) ON CONFLICT (token) DO NOTHING",
-    [token, Date.now()]
-  )
-
-  const tokenCheck = await pool.query(
-    "SELECT 1 FROM rng_tokens WHERE token = $1",
-    [token]
-  )
-
-  if (tokenCheck.rows.length === 0) {
-    return res.status(400).json({ error: "Invalid or expired token" })
+  if (token.length < 10) {
+    return res.status(400).json({ error: "Invalid token format" })
   }
 
-  const update = await pool.query(
-    "UPDATE users SET rng_linked = TRUE WHERE nickname = $1 RETURNING nickname",
-    [nickname.toLowerCase()]
-  )
+  try {
+    const userCheck = await pool.query(
+      "SELECT nickname FROM users WHERE nickname = $1",
+      [nickname.toLowerCase()]
+    )
 
-  if (update.rowCount === 0) {
-    return res.status(404).json({ error: "User not found" })
+    if (userCheck.rows.length === 0) {
+      return res.status(404).json({ error: "User not found" })
+    }
+
+    await pool.query(
+      "INSERT INTO rng_tokens(token, created_at) VALUES($1, $2) ON CONFLICT (token) DO NOTHING",
+      [token, Date.now()]
+    )
+
+    const update = await pool.query(
+      "UPDATE users SET rng_linked = TRUE WHERE nickname = $1 RETURNING nickname",
+      [nickname.toLowerCase()]
+    )
+
+    await pool.query(
+      "DELETE FROM rng_tokens WHERE token = $1",
+      [token]
+    )
+
+    res.json({ success: true })
+    
+  } catch(error) {
+    console.error("RNG link error:", error)
+    res.status(500).json({ error: "Server error" })
   }
-
-  await pool.query(
-    "DELETE FROM rng_tokens WHERE token = $1",
-    [token]
-  )
-
-  res.sendStatus(200)
 })
 
 app.post("/api/messages/read/:id", async (req, res) => {
