@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>txt</title>
+<title>txt/title>
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea;display:flex;align-items:center;justify-content:center;min-height:100vh}
 #container{max-width:500px;padding:2rem;text-align:center}
@@ -33,8 +33,13 @@ const urlParams = new URLSearchParams(window.location.search)
 const token = urlParams.get("token")
 const contentEl = document.getElementById("content")
 
+// Debug logging
+console.log("Token from URL:", token)
+console.log("Token length:", token ? token.length : 0)
+
 async function checkLogin() {
   const nickname = localStorage.getItem("nickname")
+  console.log("Nickname from localStorage:", nickname)
   
   if(!token) {
     contentEl.innerHTML = '<p class="error">Error: No token provided</p><p>Please try linking again from auth\'s RNG.</p>'
@@ -43,7 +48,7 @@ async function checkLogin() {
   
   if(!nickname) {
     // Not logged in
-    contentEl.innerHTML = '<div class="user-badge">signed in as: <strong>nobody</strong></div><p class="warning">you need a txt account to link with auth\'s RNG.</p><button class="create-account" onclick="window.location.href=\'/feed\'">create account / login</button>'
+    contentEl.innerHTML = '<div class="user-badge">signed in as: <strong>nobody</strong></div><p class="warning">you need a txt account to link with auth\'s RNG.</p><button class="create-account" onclick="window.location.href=\'/\'">create account / login</button>'
   } else {
     // Logged in - verify user exists
     try {
@@ -51,12 +56,13 @@ async function checkLogin() {
       
       if(!profileRes.ok) {
         // User doesn't exist anymore
-        localStorage.removeItem("txt_nickname")
-        contentEl.innerHTML = '<div class="user-badge">signed in as: <strong>nobody</strong></div><p class="warning">your account no longer exists. please create a new one.</p><button class="create-account" onclick="window.location.href=\'/feed\'">create account / login</button>'
+        localStorage.removeItem("nickname")
+        contentEl.innerHTML = '<div class="user-badge">signed in as: <strong>nobody</strong></div><p class="warning">your account no longer exists. please create a new one.</p><button class="create-account" onclick="window.location.href=\'/\'">create account / login</button>'
         return
       }
       
       const profile = await profileRes.json()
+      console.log("Profile data:", profile)
       
       // Check if already linked
       if(profile.rngLinked) {
@@ -77,9 +83,11 @@ async function checkLogin() {
 }
 
 async function handleLink() {
-  const nickname = localStorage.getItem("txt_nickname")
+  const nickname = localStorage.getItem("nickname")
   const button = document.getElementById("confirm-link")
   const messageEl = document.getElementById("message")
+  
+  console.log("Attempting link with:", { nickname: nickname, token: token })
   
   button.disabled = true
   button.textContent = "linking..."
@@ -92,7 +100,15 @@ async function handleLink() {
       body: JSON.stringify({ nickname: nickname, token: token })
     })
     
-    const data = await res.json().catch(function() { return {} })
+    console.log("Response status:", res.status)
+    
+    let data = {}
+    try {
+      data = await res.json()
+      console.log("Response data:", data)
+    } catch(e) {
+      console.log("No JSON response")
+    }
     
     if(res.ok) {
       messageEl.textContent = "RNG account linked successfully! Redirecting..."
@@ -101,13 +117,13 @@ async function handleLink() {
         window.location.href = "https://authsrng.neocities.org"
       }, 1500)
     } else {
-      messageEl.textContent = data.error || "Error linking account"
+      messageEl.textContent = data.error || "Error linking account (status: " + res.status + ")"
       messageEl.className = "error"
       button.disabled = false
       button.textContent = "confirm link"
     }
   } catch(e) {
-    console.error(e)
+    console.error("Network error:", e)
     messageEl.textContent = "Network error. Please try again."
     messageEl.className = "error"
     button.disabled = false
