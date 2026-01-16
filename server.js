@@ -94,6 +94,19 @@ app.get("/developers", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "developers.html"))
 })
 
+const pendingTokens = Object.create(null)
+
+app.get("/verify-rng", (req, res) => {
+  const { token } = req.query
+  if (!token) return res.status(400).send("Missing token")
+
+  pendingTokens[token] = {
+    createdAt: Date.now()
+  }
+
+  res.sendFile(path.join(__dirname, "public", "verify-rng.html"))
+})
+
 app.use(express.static("public"))
 
 async function initDB() {
@@ -560,7 +573,13 @@ app.post("/api/messages", postLimiter, async (req, res) => {
 app.post("/api/rng-link", async (req, res) => {
   const { nickname, token } = req.body
 
-  if(!pendingTokens[token]) return res.status(400).json({ error: "Invalid or expired token" })
+  if (!nickname || !token) {
+    return res.status(400).json({ error: "Missing data" })
+  }
+
+  if (!pendingTokens[token]) {
+    return res.status(400).json({ error: "Invalid or expired token" })
+  }
 
   await pool.query(
     "UPDATE users SET rng_linked = TRUE WHERE nickname = $1",
