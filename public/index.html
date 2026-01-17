@@ -12,6 +12,8 @@ textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222
 button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
 .post{border-bottom:1px solid #222;padding:.5rem 0;position:relative}
+.fact-check-warning{background:#221100;border-left:3px solid #f80;padding:.7rem;margin:.5rem 0;font-size:.85rem;color:#ffaa44;border-radius:.25rem}
+.fact-check-warning strong{color:#ff8800}
 .meta{font-size:.8rem;color:#777;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
 .comment{font-size:.85rem;margin-left:1rem;color:#777;display:flex;justify-content:space-between;align-items:center}
 .comment button{padding:.2rem .4rem;font-size:.7rem}
@@ -267,13 +269,33 @@ async function load(){
   const r=await fetch("/api/posts?offset="+offset)
   const d=await r.json()
   const el=document.getElementById("posts")
+  
+  // Create a map of fact checks by post_id
+  const factCheckMap = {}
+  if (d.factChecks) {
+    d.factChecks.forEach(fc => {
+      factCheckMap[fc.post_id] = fc
+    })
+  }
+  
   d.posts.forEach(p=>{
     const commentCount = d.comments.filter(c=>c.post_id===p.id).length
+    const factCheck = factCheckMap[p.id]
+    
     const div=document.createElement("div")
     div.className="post"
     div.dataset.postId=p.id
-    div.innerHTML=`<div>${processContent(p.content)}</div>
-      <div class="meta">
+    
+    let postHTML = `<div>${processContent(p.content)}</div>`
+    
+    // Add fact check warning if it exists
+    if (factCheck) {
+      postHTML += `<div class="fact-check-warning">
+        <strong>⚠️ Fact Check:</strong> ${escapeHtml(factCheck.admin_message)}
+      </div>`
+    }
+    
+    postHTML += `<div class="meta">
         <a href="/profile/${p.nickname}">@${p.nickname}</a>
         <span>${timeago(p.created_at)}</span>
         <span>score: <span id="score${p.id}">${p.score}</span></span>
@@ -294,6 +316,9 @@ async function load(){
         <input maxlength="100" placeholder="comment">
         <button onclick="sendcomment(${p.id})">send</button>
       </div>`
+    
+    div.innerHTML = postHTML
+    
     const commentsdiv=div.querySelector("#comments"+p.id)
     d.comments.filter(c=>c.post_id===p.id&&!c.parent_id).forEach(c=>{
       commentsdiv.appendChild(createcommentdiv(c))
