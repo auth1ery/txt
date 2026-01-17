@@ -250,7 +250,7 @@ app.get("/api/usercount", async (req, res) => {
   res.json({ count: result.rows[0].c })
 })
 
-app.get("/api/posts", async (req, res) => {
+.get("/api/posts", async (req, res) => {
   const offset = Number(req.query.offset || 0)
   const now = Date.now()
   
@@ -271,16 +271,27 @@ app.get("/api/posts", async (req, res) => {
   const ids = posts.map(p => p.id)
   
   let comments = []
+  let factChecks = []
+  
   if (ids.length) {
-    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')
-    const result = await pool.query(
+    const placeholders = ids.map((_, i) => `${i + 1}`).join(',')
+    
+    // Get comments
+    const commentsResult = await pool.query(
       `SELECT * FROM comments WHERE post_id IN (${placeholders}) ORDER BY created_at ASC`,
       ids
     )
-    comments = result.rows
+    comments = commentsResult.rows
+    
+    // Get fact checks - THIS IS THE KEY PART TRDTFYGFRUEIRJRFHEIJDWUIDGYHS
+    const factCheckResult = await pool.query(
+      `SELECT * FROM fact_checks WHERE post_id IN (${placeholders})`,
+      ids
+    )
+    factChecks = factCheckResult.rows
   }
   
-  res.json({ posts, comments })
+  res.json({ posts, comments, factChecks })
 })
 
 app.post("/api/posts", postLimiter, async (req, res) => {
@@ -535,6 +546,18 @@ app.get("/api/fact-check/:post_id", async (req, res) => {
   res.json({ factCheck: result.rows[0] })
 })
 
+app.get("/api/fact-check/:post_id", async (req, res) => {
+  const postId = req.params.post_id
+  const result = await pool.query(
+    "SELECT * FROM fact_checks WHERE post_id = $1",
+    [postId]
+  )
+  if (result.rows.length === 0) {
+    return res.json({ factCheck: null })
+  }
+  res.json({ factCheck: result.rows[0] })
+})
+
 // Admin: Add or update fact check
 app.post("/api/admin/fact-check", async (req, res) => {
   const { post_id, admin_message } = req.body
@@ -570,52 +593,6 @@ app.delete("/api/admin/fact-check/:post_id", async (req, res) => {
   const postId = req.params.post_id
   await pool.query("DELETE FROM fact_checks WHERE post_id = $1", [postId])
   res.sendStatus(200)
-})
-
-// Modify the GET /api/posts endpoint to include fact checks
-// Replace your existing /api/posts endpoint with this:
-app.get("/api/posts", async (req, res) => {
-  const offset = Number(req.query.offset || 0)
-  const now = Date.now()
-  
-  if (now - postCache.timestamp > 5000) {
-    const result = await pool.query(`
-      SELECT p.*, COALESCE(SUM(r.value), 0) as score
-      FROM posts p
-      LEFT JOIN reactions r ON p.id = r.post_id
-      GROUP BY p.id
-      ORDER BY p.created_at DESC
-      LIMIT 200
-    `)
-    postCache.data = result.rows
-    postCache.timestamp = now
-  }
-  
-  const posts = postCache.data.slice(offset, offset + 20)
-  const ids = posts.map(p => p.id)
-  
-  let comments = []
-  let factChecks = []
-  
-  if (ids.length) {
-    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')
-    
-    // Get comments
-    const commentsResult = await pool.query(
-      `SELECT * FROM comments WHERE post_id IN (${placeholders}) ORDER BY created_at ASC`,
-      ids
-    )
-    comments = commentsResult.rows
-    
-    // Get fact checks
-    const factCheckResult = await pool.query(
-      `SELECT * FROM fact_checks WHERE post_id IN (${placeholders})`,
-      ids
-    )
-    factChecks = factCheckResult.rows
-  }
-  
-  res.json({ posts, comments, factChecks })
 })
 
 app.delete("/api/admin/post/:id", async (req, res) => {
