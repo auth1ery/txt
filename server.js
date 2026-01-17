@@ -274,7 +274,7 @@ app.get("/api/posts", async (req, res) => {
   let factChecks = []
   
   if (ids.length) {
-    const placeholders = ids.map((_, i) => `${i + 1}`).join(',')
+    const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')  
     
     // Get comments
     const commentsResult = await pool.query(
@@ -283,7 +283,7 @@ app.get("/api/posts", async (req, res) => {
     )
     comments = commentsResult.rows
     
-    // Get fact checks - THIS IS THE KEY PART TRDTFYGFRUEIRJRFHEIJDWUIDGYHS
+    // Get fact checks
     const factCheckResult = await pool.query(
       `SELECT * FROM fact_checks WHERE post_id IN (${placeholders})`,
       ids
