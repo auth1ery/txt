@@ -13,6 +13,9 @@ button{padding:.7rem 1.5rem;border:1px solid #555;border-radius:.25rem;backgroun
 button:hover{border-color:#eaeaea;color:#fff}
 .section{background:#111;border:1px solid #222;border-radius:.5rem;padding:1.5rem;margin:2rem 0}
 .report,.post,.user{background:#0a0a0a;border:1px solid #222;padding:1rem;margin:1rem 0;border-radius:.25rem}
+.post.flagged{border-left:3px solid #f80}
+.fact-check-badge{background:#f80;color:#000;padding:.2rem .5rem;border-radius:.25rem;font-size:.75rem;font-weight:bold;margin-left:.5rem}
+.fact-check-display{background:#221100;border-left:3px solid #f80;padding:.7rem;margin:.5rem 0;font-size:.9rem;color:#ffaa44}
 .report-actions{margin-top:1rem}
 select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font-size:1rem}
 .error{color:#c44;margin:.5rem 0}
@@ -23,6 +26,11 @@ select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font
 .tab.active{border-color:#eaeaea;color:#fff}
 .tab-content{display:none}
 .tab-content.active{display:block}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.8);z-index:100;align-items:center;justify-content:center}
+.modal.show{display:flex}
+.modal-content{background:#111;border:1px solid #333;border-radius:.5rem;padding:2rem;max-width:600px;width:90%}
+.modal-content h3{margin-top:0}
+.modal-content button{margin:.5rem .25rem}
 </style>
 </head>
 <body>
@@ -87,8 +95,21 @@ select{background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;font
 
 </div>
 
+<div id="fact-check-modal" class="modal">
+<div class="modal-content">
+<h3>Fact Check Post</h3>
+<p class="small" id="modal-post-content"></p>
+<textarea id="fact-check-message" placeholder="Enter your fact check message (max 500 chars)" maxlength="500" style="width:100%;min-height:120px;margin:1rem 0;padding:.7rem;background:#0f0f0f;color:#eaeaea;border:1px solid #222;box-sizing:border-box"></textarea>
+<div class="small" style="text-align:right;margin-bottom:1rem"><span id="fact-check-count">0</span>/500</div>
+<button onclick="submitFactCheck()">Add Fact Check</button>
+<button onclick="closeFactCheckModal()">Cancel</button>
+</div>
+</div>
+
 <script>
 let currentTab = 'reports'
+let currentFactCheckPostId = null
+let postsData = []
 
 async function login() {
   const pass = document.getElementById('pass').value
@@ -141,6 +162,7 @@ async function loadReports() {
       <div class="report-actions">
         <button onclick="banUser('${rep.target_user || rep.reporter}', ${rep.id})">Ban User</button>
         ${rep.target_post ? `<button onclick="deletePost(${rep.target_post}, ${rep.id})">Delete Post</button>` : ''}
+        ${rep.target_post ? `<button onclick="openFactCheckModal(${rep.target_post}, '${rep.reason}')" style="color:#f80">Fact Check</button>` : ''}
         <button onclick="resolveReport(${rep.id})">Mark Resolved</button>
       </div>
     </div>
@@ -150,16 +172,39 @@ async function loadReports() {
 async function loadPosts() {
   const r = await fetch('/api/admin/posts')
   const data = await r.json()
+  postsData = data.posts
+  
+  // Get fact checks for all posts
+  const factChecks = {}
+  for (const post of data.posts.slice(0, 50)) {
+    const fcr = await fetch(`/api/fact-check/${post.id}`)
+    const fcdata = await fcr.json()
+    if (fcdata.factCheck) {
+      factChecks[post.id] = fcdata.factCheck
+    }
+  }
+  
   const list = document.getElementById('posts-list')
   
-  list.innerHTML = data.posts.slice(0, 50).map(post => `
-    <div class="post">
-      <div><strong>ID:</strong> ${post.id} | <strong>User:</strong> ${post.nickname}</div>
-      <div>${post.content}</div>
-      <div class="small">${new Date(post.created_at).toLocaleString()}</div>
-      <button onclick="deletePost(${post.id})">Delete</button>
-    </div>
-  `).join('')
+  list.innerHTML = data.posts.slice(0, 50).map(post => {
+    const fc = factChecks[post.id]
+    return `
+      <div class="post ${fc ? 'flagged' : ''}">
+        <div>
+          <strong>ID:</strong> ${post.id} | <strong>User:</strong> ${post.nickname}
+          ${fc ? '<span class="fact-check-badge">FACT CHECKED</span>' : ''}
+        </div>
+        <div style="margin:.5rem 0">${post.content}</div>
+        ${fc ? `<div class="fact-check-display">⚠️ Fact Check: ${fc.admin_message}</div>` : ''}
+        <div class="small">${new Date(post.created_at).toLocaleString()}</div>
+        <button onclick="openFactCheckModal(${post.id}, '${post.content.replace(/'/g, "\\'")}')">
+          ${fc ? 'Edit' : 'Add'} Fact Check
+        </button>
+        ${fc ? `<button onclick="removeFactCheck(${post.id})" style="color:#c44">Remove Fact Check</button>` : ''}
+        <button onclick="deletePost(${post.id})">Delete Post</button>
+      </div>
+    `
+  }).join('')
 }
 
 async function loadUsers() {
@@ -202,6 +247,70 @@ async function loadBans() {
       </div>
     `
   }).join('')
+}
+
+function openFactCheckModal(postId, content) {
+  currentFactCheckPostId = postId
+  document.getElementById('modal-post-content').textContent = `Post: "${content}"`
+  
+  // Load existing fact check if any
+  fetch(`/api/fact-check/${postId}`)
+    .then(r => r.json())
+    .then(data => {
+      if (data.factCheck) {
+        document.getElementById('fact-check-message').value = data.factCheck.admin_message
+        document.getElementById('fact-check-count').textContent = data.factCheck.admin_message.length
+      } else {
+        document.getElementById('fact-check-message').value = ''
+        document.getElementById('fact-check-count').textContent = '0'
+      }
+    })
+  
+  document.getElementById('fact-check-modal').classList.add('show')
+}
+
+function closeFactCheckModal() {
+  document.getElementById('fact-check-modal').classList.remove('show')
+  currentFactCheckPostId = null
+  document.getElementById('fact-check-message').value = ''
+}
+
+async function submitFactCheck() {
+  const message = document.getElementById('fact-check-message').value.trim()
+  if (!message) {
+    alert('Please enter a fact check message')
+    return
+  }
+  
+  const r = await fetch('/api/admin/fact-check', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      post_id: currentFactCheckPostId,
+      admin_message: message
+    })
+  })
+  
+  if (r.ok) {
+    alert('Fact check added!')
+    closeFactCheckModal()
+    if (currentTab === 'posts') loadPosts()
+  } else {
+    alert('Error adding fact check')
+  }
+}
+
+async function removeFactCheck(postId) {
+  if (!confirm('Remove fact check from this post?')) return
+  
+  const r = await fetch(`/api/admin/fact-check/${postId}`, {method: 'DELETE'})
+  
+  if (r.ok) {
+    alert('Fact check removed!')
+    if (currentTab === 'posts') loadPosts()
+  } else {
+    alert('Error removing fact check')
+  }
 }
 
 async function banUser(nickname, reportId) {
@@ -268,6 +377,10 @@ async function unbanUser(nickname) {
 
 document.getElementById('broadcast-content')?.addEventListener('input', (e) => {
   document.getElementById('broadcast-count').textContent = e.target.value.length
+})
+
+document.getElementById('fact-check-message')?.addEventListener('input', (e) => {
+  document.getElementById('fact-check-count').textContent = e.target.value.length
 })
 
 async function sendBroadcast() {
