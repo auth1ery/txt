@@ -250,7 +250,7 @@ app.get("/api/usercount", async (req, res) => {
   res.json({ count: result.rows[0].c })
 })
 
-.get("/api/posts", async (req, res) => {
+app.get("/api/posts", async (req, res) => {
   const offset = Number(req.query.offset || 0)
   const now = Date.now()
   
