@@ -7,7 +7,7 @@
 ![github forks](https://img.shields.io/github/forks/auth1ery/txt?style=social)
 ![made with love](https://img.shields.io/badge/made%20with-♥-red)
 
-txt is a simple and lightweight social media designed for anyone and any browser
+txt is a simple and lightweight social media designed for anyone and any browser.
 its very small in size of the source code and the backend is built to use as little CPU and RAM as possible
 
 # features
@@ -21,6 +21,7 @@ its very small in size of the source code and the backend is built to use as lit
 - inboxes
 - email system
 - html, css, and js sanitization
+- integration support
 
 # install
 
@@ -45,7 +46,7 @@ ADMIN_PASS is for the password to enter admin.html.
 DATABASE_URL is your PostgreSQL database URL.   
 DISCORD_WEBHOOK is optional, but great if you want to see new posts made in real time in a Discord server.   
 
-if you would NOT like discord intergration, just make the environmental variable but leave it blank
+if you would NOT like discord integration, just make the environmental variable but leave it blank
 
 once things are fully in and installed, start the server:
 
