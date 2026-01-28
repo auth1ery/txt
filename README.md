@@ -51,4 +51,6 @@ once things are fully in and installed, start the server:
 
 ```npm start```
 
+or use the dockerfile
+
 thats it!
