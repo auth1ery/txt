@@ -16,6 +16,7 @@ its very small in size of the source code and the backend is built to use as lit
 - score system (upvoting and downvoting)
 - comments and replies
 - profiles
+- customizable profile pages
 - reporting system
 - inboxes
 - email system
