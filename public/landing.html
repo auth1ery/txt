@@ -17,6 +17,7 @@ button:hover{border-color:#eaeaea;color:#fff}
 .legal{font-size:.75rem;color:#555;margin:.5rem 0}
 .legal a{color:#777;text-decoration:none}
 .legal a:hover{color:#eaeaea}
+#container {position: relative;z-index: 1;}
 </style>
 </head>
 <body>
@@ -35,12 +36,7 @@ button:hover{border-color:#eaeaea;color:#fff}
 <script>
 const scene = new THREE.Scene();
 
-const camera = new THREE.PerspectiveCamera(
-  75,
-  window.innerWidth / window.innerHeight,
-  0.1,
-  1000
-);
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
 camera.position.z = 2;
 
 const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
@@ -49,16 +45,16 @@ renderer.setPixelRatio(window.devicePixelRatio);
 renderer.domElement.style.position = "fixed";
 renderer.domElement.style.top = "0";
 renderer.domElement.style.left = "0";
-renderer.domElement.style.zIndex = "-1";
+renderer.domElement.style.zIndex = "-1"; 
 document.body.appendChild(renderer.domElement);
 
-const geometry = new THREE.SphereGeometry(0.8, 64, 64);
-
+const geometry = new THREE.SphereGeometry(0.8, 16, 16);
 const material = new THREE.MeshBasicMaterial({
-  color: 0xaaaaaa,
-  wireframe: true
+  color: 0x888888,
+  wireframe: true,
+  transparent: true,
+  opacity: 0.3
 });
-
 const globe = new THREE.Mesh(geometry, material);
 scene.add(globe);
 
