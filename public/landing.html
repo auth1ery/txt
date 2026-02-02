@@ -50,10 +50,10 @@ document.body.appendChild(renderer.domElement);
 
 const geometry = new THREE.SphereGeometry(0.8, 16, 16);
 const material = new THREE.MeshBasicMaterial({
-  color: 0x888888,
+  color: 0x444444,
   wireframe: true,
   transparent: true,
-  opacity: 0.3
+  opacity: 0.14
 });
 const globe = new THREE.Mesh(geometry, material);
 scene.add(globe);
