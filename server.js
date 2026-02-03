@@ -67,6 +67,14 @@ app.get("/notifications", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "notifications.html"))
 })
 
+app.get("/profile/:nick/followers", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "followers.html"))
+})
+
+app.get("/profile/:nick/following", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "following.html"))
+})
+
 app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"))
 })
