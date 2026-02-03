@@ -88,11 +88,11 @@ const profileNick = window.location.pathname.split('/').pop()
 let isFollowing = false
 
 function showFollowers(){
-  alert("Follower list coming soon!")
+  location.href = `/profile/${profileNick}/followers`
 }
 
 function showFollowing(){
-  alert("Following list coming soon!")
+  location.href = `/profile/${profileNick}/following`
 }
 
 async function loadProfile(){
