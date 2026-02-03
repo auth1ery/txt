@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>discover - txt</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+button.following{border-color:#4c4;color:#4c4}
+.user-card{border-bottom:1px solid #222;padding:1rem 0}
+.user-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:.5rem}
+.user-info h3{margin:0;color:#eaeaea}
+.user-info .meta{font-size:.85rem;color:#777;margin-top:.3rem}
+.user-bio{color:#aaa;font-size:.9rem;margin:.5rem 0}
+a{color:#777;text-decoration:none}
+a:hover{color:#fff}
+.back-btn{margin-bottom:1rem}
+.empty{text-align:center;color:#777;padding:2rem}
+</style>
+</head>
+<body>
+<div id="app">
+<button class="back-btn" onclick="location.href='/feed'">← back to feed</button>
+<h2>discover users</h2>
+<div id="users"></div>
+<div id="empty" class="empty hidden">no users to discover right now</div>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname = localStorage.getItem("nickname")
+
+async function loadUsers(){
+  const r = await fetch(`/api/discover/users?nickname=${nickname}&limit=50`)
+  const data = await r.json()
+  const el = document.getElementById("users")
+  
+  if(data.users.length === 0){
+    document.getElementById('empty').classList.remove('hidden')
+    return
+  }
+  
+  for(const user of data.users){
+    const card = document.createElement("div")
+    card.className = "user-card"
+    
+    const bio = user.bio ? `<div class="user-bio">${escapeHtml(user.bio)}</div>` : ''
+    
+    card.innerHTML = `
+      <div class="user-header">
+        <div class="user-info">
+          <h3><a href="/profile/${user.nickname}">@${user.nickname}</a></h3>
+          <div class="meta">${user.follower_count} followers · ${user.post_count} posts</div>
+        </div>
+        <button id="follow-${user.nickname}" onclick="toggleFollow('${user.nickname}')">follow</button>
+      </div>
+      ${bio}
+    `
+    
+    el.appendChild(card)
+  }
+}
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+async function toggleFollow(targetUser){
+  const btn = document.getElementById(`follow-${targetUser}`)
+  const isFollowing = btn.classList.contains('following')
+  
+  if(isFollowing){
+    const r = await fetch(`/api/follow/${targetUser}`, {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower: nickname})
+    })
+    if(r.ok){
+      btn.textContent = 'follow'
+      btn.classList.remove('following')
+    }
+  } else {
+    const r = await fetch('/api/follow', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower: nickname, following: targetUser})
+    })
+    if(r.ok){
+      btn.textContent = 'following'
+      btn.classList.add('following')
+    }
+  }
+}
+
+loadUsers()
+</script>
+</body>
+</html>
