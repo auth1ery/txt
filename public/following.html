@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>following - txt</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+button.following{border-color:#4c4;color:#4c4}
+.user-card{border-bottom:1px solid #222;padding:1rem 0;display:flex;justify-content:space-between;align-items:center}
+.user-info h3{margin:0;font-size:1rem}
+.user-info h3 a{color:#eaeaea;text-decoration:none}
+.user-info h3 a:hover{color:#fff}
+.user-meta{font-size:.85rem;color:#777;margin-top:.3rem}
+a{color:#777;text-decoration:none}
+a:hover{color:#fff}
+.back-btn{margin-bottom:1rem}
+.empty{text-align:center;color:#777;padding:2rem}
+</style>
+</head>
+<body>
+<div id="app">
+<button class="back-btn" onclick="goBack()">← back</button>
+<h2 id="title"></h2>
+<div id="users"></div>
+<div id="empty" class="empty hidden">not following anyone yet</div>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const currentUser = localStorage.getItem("nickname")
+const urlParts = window.location.pathname.split('/')
+const profileNick = urlParts[2]
+
+function goBack(){
+  location.href = `/profile/${profileNick}`
+}
+
+function timeago(t){
+  const s=Math.floor((Date.now()-t)/1000)
+  if(s<60) return s+"s ago"
+  const m=Math.floor(s/60)
+  if(m<60) return m+"m ago"
+  const h=Math.floor(m/60)
+  if(h<24) return h+"h ago"
+  const d=Math.floor(h/24)
+  if(d<7) return d+"d ago"
+  return Math.floor(d/7)+"w ago"
+}
+
+async function loadFollowing(){
+  document.getElementById('title').textContent = `@${profileNick} is following`
+  
+  const r = await fetch(`/api/following/${profileNick}`)
+  const data = await r.json()
+  const el = document.getElementById("users")
+  
+  if(data.following.length === 0){
+    document.getElementById('empty').classList.remove('hidden')
+    return
+  }
+  
+  const isOwnProfile = profileNick === currentUser
+  
+  for(const f of data.following){
+    const card = document.createElement("div")
+    card.className = "user-card"
+    
+    const isSelf = f.following === currentUser
+    
+    card.innerHTML = `
+      <div class="user-info">
+        <h3><a href="/profile/${f.following}">@${f.following}</a></h3>
+        <div class="user-meta">following since ${timeago(f.created_at)}</div>
+      </div>
+      ${isSelf ? '' : `<button id="follow-${f.following}" onclick="toggleFollow('${f.following}')">follow</button>`}
+    `
+    
+    el.appendChild(card)
+    
+    if(!isSelf){
+      checkFollowStatus(f.following)
+    }
+  }
+}
+
+async function checkFollowStatus(targetUser){
+  const r = await fetch(`/api/is-following?follower=${currentUser}&following=${targetUser}`)
+  const data = await r.json()
+  
+  const btn = document.getElementById(`follow-${targetUser}`)
+  if(btn){
+    if(data.isFollowing){
+      btn.textContent = 'following'
+      btn.classList.add('following')
+    } else {
+      btn.textContent = 'follow'
+      btn.classList.remove('following')
+    }
+  }
+}
+
+async function toggleFollow(targetUser){
+  const btn = document.getElementById(`follow-${targetUser}`)
+  const isFollowing = btn.classList.contains('following')
+  
+  if(isFollowing){
+    const r = await fetch(`/api/follow/${targetUser}`, {
+      method: 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower: currentUser})
+    })
+    if(r.ok){
+      btn.textContent = 'follow'
+      btn.classList.remove('following')
+    }
+  } else {
+    const r = await fetch('/api/follow', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({follower: currentUser, following: targetUser})
+    })
+    if(r.ok){
+      btn.textContent = 'following'
+      btn.classList.add('following')
+    }
+  }
+}
+
+loadFollowing()
+</script>
+</body>
+</html>
