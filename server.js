@@ -55,6 +55,18 @@ app.get("/profile/:nick", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "profile.html"))
 })
 
+app.get("/post/:id", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "post.html"))
+})
+
+app.get("/discover", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "discover.html"))
+})
+
+app.get("/notifications", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "notifications.html"))
+})
+
 app.get("/terms", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "terms.html"))
 })
@@ -167,6 +179,31 @@ async function initDB() {
     created_at BIGINT
   );
 
+    CREATE TABLE IF NOT EXISTS follows (
+      follower TEXT,
+      following TEXT,
+      created_at BIGINT,
+      PRIMARY KEY (follower, following)
+    );
+
+    CREATE TABLE IF NOT EXISTS notifications (
+      id SERIAL PRIMARY KEY,
+      user_nick TEXT,
+      type TEXT,
+      from_user TEXT,
+      post_id INTEGER,
+      created_at BIGINT,
+      read BOOLEAN DEFAULT FALSE
+    );
+
+    CREATE TABLE IF NOT EXISTS reposts (
+      id SERIAL PRIMARY KEY,
+      nickname TEXT,
+      original_post_id INTEGER,
+      comment TEXT,
+      created_at BIGINT
+    );
+
     CREATE TABLE IF NOT EXISTS fact_checks (
       id SERIAL PRIMARY KEY,
       post_id INTEGER UNIQUE,
@@ -214,6 +251,13 @@ async function checkBan(nickname) {
   return ban
 }
 
+async function createNotification(userNick, type, fromUser, postId = null) {
+  await pool.query(
+    "INSERT INTO notifications(user_nick, type, from_user, post_id, created_at) VALUES($1, $2, $3, $4, $5)",
+    [userNick, type, fromUser, postId, Date.now()]
+  )
+}
+
 app.post("/api/check-ban", async (req, res) => {
   const { nickname } = req.body
   const ban = await checkBan(nickname)
@@ -252,46 +296,100 @@ app.get("/api/usercount", async (req, res) => {
 
 app.get("/api/posts", async (req, res) => {
   const offset = Number(req.query.offset || 0)
+  const feedType = req.query.feed || 'all'
+  const nickname = req.query.nickname
   const now = Date.now()
   
-  if (now - postCache.timestamp > 5000) {
-    const result = await pool.query(`
-      SELECT p.*, COALESCE(SUM(r.value), 0) as score
-      FROM posts p
-      LEFT JOIN reactions r ON p.id = r.post_id
-      GROUP BY p.id
-      ORDER BY p.created_at DESC
-      LIMIT 200
-    `)
-    postCache.data = result.rows
-    postCache.timestamp = now
+  let query = `
+    SELECT p.*, COALESCE(SUM(r.value), 0) as score
+    FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+  `
+  
+  if (feedType === 'following' && nickname) {
+    query += `
+      WHERE p.nickname IN (
+        SELECT following FROM follows WHERE follower = $1
+      )
+    `
   }
   
-  const posts = postCache.data.slice(offset, offset + 20)
+  query += `
+    GROUP BY p.id
+    ORDER BY p.created_at DESC
+    LIMIT 200
+  `
+  
+  const result = feedType === 'following' && nickname 
+    ? await pool.query(query, [nickname])
+    : await pool.query(query)
+  
+  const posts = result.rows.slice(offset, offset + 20)
   const ids = posts.map(p => p.id)
   
   let comments = []
   let factChecks = []
+  let reposts = []
   
   if (ids.length) {
     const placeholders = ids.map((_, i) => `$${i + 1}`).join(',')  
     
-    // Get comments
     const commentsResult = await pool.query(
       `SELECT * FROM comments WHERE post_id IN (${placeholders}) ORDER BY created_at ASC`,
       ids
     )
     comments = commentsResult.rows
     
-    // Get fact checks
     const factCheckResult = await pool.query(
       `SELECT * FROM fact_checks WHERE post_id IN (${placeholders})`,
       ids
     )
     factChecks = factCheckResult.rows
+    
+    const repostResult = await pool.query(
+      `SELECT COUNT(*) as count, original_post_id FROM reposts WHERE original_post_id IN (${placeholders}) GROUP BY original_post_id`,
+      ids
+    )
+    reposts = repostResult.rows
   }
   
-  res.json({ posts, comments, factChecks })
+  res.json({ posts, comments, factChecks, reposts })
+})
+
+app.get("/api/post/:id", async (req, res) => {
+  const id = req.params.id
+  
+  const postResult = await pool.query(`
+    SELECT p.*, COALESCE(SUM(r.value), 0) as score
+    FROM posts p
+    LEFT JOIN reactions r ON p.id = r.post_id
+    WHERE p.id = $1
+    GROUP BY p.id
+  `, [id])
+  
+  if (postResult.rows.length === 0) return res.sendStatus(404)
+  
+  const commentsResult = await pool.query(
+    "SELECT * FROM comments WHERE post_id = $1 ORDER BY created_at ASC",
+    [id]
+  )
+  
+  const factCheckResult = await pool.query(
+    "SELECT * FROM fact_checks WHERE post_id = $1",
+    [id]
+  )
+  
+  const repostResult = await pool.query(
+    "SELECT COUNT(*) as count FROM reposts WHERE original_post_id = $1",
+    [id]
+  )
+  
+  res.json({
+    post: postResult.rows[0],
+    comments: commentsResult.rows,
+    factCheck: factCheckResult.rows[0] || null,
+    repostCount: repostResult.rows[0].count
+  })
 })
 
 app.post("/api/posts", postLimiter, async (req, res) => {
@@ -308,6 +406,16 @@ app.post("/api/posts", postLimiter, async (req, res) => {
     "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
     [nickname, sanitized, Date.now()]
   )
+  
+  const mentions = sanitized.match(/@(\w+)/g)
+  if (mentions) {
+    for (const mention of mentions) {
+      const mentionedUser = mention.substring(1).toLowerCase()
+      if (mentionedUser !== nickname) {
+        await createNotification(mentionedUser, 'mention', nickname, result.rows[0].id)
+      }
+    }
+  }
   
   if (DISCORD_WEBHOOK) {
     try {
@@ -362,7 +470,188 @@ app.post("/api/comments", postLimiter, async (req, res) => {
     "INSERT INTO comments(post_id, parent_id, nickname, content, created_at) VALUES($1, $2, $3, $4, $5) RETURNING id",
     [post_id, parent_id || null, nickname, sanitized, Date.now()]
   )
+  
+  const postResult = await pool.query("SELECT nickname FROM posts WHERE id = $1", [post_id])
+  if (postResult.rows.length > 0 && postResult.rows[0].nickname !== nickname) {
+    await createNotification(postResult.rows[0].nickname, 'reply', nickname, post_id)
+  }
+  
+  const mentions = sanitized.match(/@(\w+)/g)
+  if (mentions) {
+    for (const mention of mentions) {
+      const mentionedUser = mention.substring(1).toLowerCase()
+      if (mentionedUser !== nickname) {
+        await createNotification(mentionedUser, 'mention', nickname, post_id)
+      }
+    }
+  }
+  
   res.json({ id: result.rows[0].id })
+})
+
+app.post("/api/follow", async (req, res) => {
+  const { follower, following } = req.body
+  if (!follower || !following || follower === following) return res.sendStatus(400)
+  
+  const ban = await checkBan(follower)
+  if (ban) return res.status(403).json({ banned: true })
+  
+  try {
+    await pool.query(
+      "INSERT INTO follows VALUES($1, $2, $3)",
+      [follower.toLowerCase(), following.toLowerCase(), Date.now()]
+    )
+    await createNotification(following.toLowerCase(), 'follow', follower.toLowerCase())
+    res.sendStatus(200)
+  } catch {
+    res.sendStatus(409)
+  }
+})
+
+app.delete("/api/follow/:nickname", async (req, res) => {
+  const { follower } = req.body
+  const following = req.params.nickname
+  
+  await pool.query(
+    "DELETE FROM follows WHERE follower = $1 AND following = $2",
+    [follower.toLowerCase(), following.toLowerCase()]
+  )
+  res.sendStatus(200)
+})
+
+app.get("/api/followers/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT follower, created_at FROM follows WHERE following = $1 ORDER BY created_at DESC",
+    [nickname]
+  )
+  res.json({ followers: result.rows })
+})
+
+app.get("/api/following/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT following, created_at FROM follows WHERE follower = $1 ORDER BY created_at DESC",
+    [nickname]
+  )
+  res.json({ following: result.rows })
+})
+
+app.get("/api/is-following", async (req, res) => {
+  const { follower, following } = req.query
+  const result = await pool.query(
+    "SELECT * FROM follows WHERE follower = $1 AND following = $2",
+    [follower.toLowerCase(), following.toLowerCase()]
+  )
+  res.json({ isFollowing: result.rows.length > 0 })
+})
+
+app.get("/api/discover/users", async (req, res) => {
+  const nickname = req.query.nickname
+  const limit = Number(req.query.limit || 20)
+  
+  let query = `
+    SELECT u.nickname, u.created_at, u.bio, 
+           COUNT(DISTINCT f.follower) as follower_count,
+           COUNT(DISTINCT p.id) as post_count
+    FROM users u
+    LEFT JOIN follows f ON u.nickname = f.following
+    LEFT JOIN posts p ON u.nickname = p.nickname
+  `
+  
+  if (nickname) {
+    query += `
+      WHERE u.nickname != $1 
+      AND u.nickname NOT IN (
+        SELECT following FROM follows WHERE follower = $1
+      )
+    `
+  }
+  
+  query += `
+    GROUP BY u.nickname, u.created_at, u.bio
+    ORDER BY follower_count DESC, post_count DESC
+    LIMIT $${nickname ? 2 : 1}
+  `
+  
+  const result = nickname 
+    ? await pool.query(query, [nickname.toLowerCase(), limit])
+    : await pool.query(query, [limit])
+  
+  res.json({ users: result.rows })
+})
+
+app.get("/api/notifications/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT * FROM notifications WHERE user_nick = $1 ORDER BY created_at DESC LIMIT 50",
+    [nickname]
+  )
+  res.json({ notifications: result.rows })
+})
+
+app.get("/api/notifications/unread/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT COUNT(*) as c FROM notifications WHERE user_nick = $1 AND read = FALSE",
+    [nickname]
+  )
+  res.json({ count: result.rows[0].c })
+})
+
+app.post("/api/notifications/read/:id", async (req, res) => {
+  const id = req.params.id
+  await pool.query("UPDATE notifications SET read = TRUE WHERE id = $1", [id])
+  res.sendStatus(200)
+})
+
+app.post("/api/notifications/read-all/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  await pool.query("UPDATE notifications SET read = TRUE WHERE user_nick = $1", [nickname])
+  res.sendStatus(200)
+})
+
+app.post("/api/repost", postLimiter, async (req, res) => {
+  const { nickname, post_id, comment } = req.body
+  if (!post_id) return res.sendStatus(400)
+  if (comment && comment.length > 200) return res.sendStatus(400)
+  
+  const ban = await checkBan(nickname)
+  if (ban) return res.status(403).json({ banned: true })
+  
+  const sanitizedComment = comment ? sanitizeHtml(comment, { allowedTags: [], allowedAttributes: {} }) : null
+  
+  const result = await pool.query(
+    "INSERT INTO reposts(nickname, original_post_id, comment, created_at) VALUES($1, $2, $3, $4) RETURNING id",
+    [nickname, post_id, sanitizedComment, Date.now()]
+  )
+  
+  const postResult = await pool.query("SELECT nickname FROM posts WHERE id = $1", [post_id])
+  if (postResult.rows.length > 0 && postResult.rows[0].nickname !== nickname) {
+    await createNotification(postResult.rows[0].nickname, 'repost', nickname, post_id)
+  }
+  
+  res.json({ id: result.rows[0].id })
+})
+
+app.delete("/api/repost/:id", async (req, res) => {
+  const id = req.params.id
+  const { nickname } = req.body
+  
+  await pool.query(
+    "DELETE FROM reposts WHERE id = $1 AND nickname = $2",
+    [id, nickname]
+  )
+  res.sendStatus(200)
+})
+
+app.get("/api/reposts/:post_id", async (req, res) => {
+  const postId = req.params.post_id
+  const result = await pool.query(
+    "SELECT * FROM reposts WHERE original_post_id = $1 ORDER BY created_at DESC",
+    [postId]
+  )
+  res.json({ reposts: result.rows })
 })
 
 app.get("/api/profile/:nick", async (req, res) => {
@@ -377,6 +666,16 @@ app.get("/api/profile/:nick", async (req, res) => {
   const joinNumberResult = await pool.query(
     "SELECT COUNT(*) as num FROM users WHERE created_at <= $1",
     [userResult.rows[0].created_at]
+  )
+  
+  const followersResult = await pool.query(
+    "SELECT COUNT(*) as c FROM follows WHERE following = $1",
+    [nick]
+  )
+  
+  const followingResult = await pool.query(
+    "SELECT COUNT(*) as c FROM follows WHERE follower = $1",
+    [nick]
   )
   
   const reactionsResult = await pool.query(`
@@ -412,8 +711,9 @@ app.get("/api/profile/:nick", async (req, res) => {
     upvotes,
     downvotes,
     lastPost: lastPostResult.rows[0] || null,
-
-    rngLinked: userResult.rows[0].rng_linked || false
+    rngLinked: userResult.rows[0].rng_linked || false,
+    followers: followersResult.rows[0].c,
+    following: followingResult.rows[0].c
   })
 })
 
@@ -444,6 +744,9 @@ app.delete("/api/account/:nick", async (req, res) => {
     await pool.query("DELETE FROM reactions WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM comments WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM posts WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM follows WHERE follower = $1 OR following = $1", [nick])
+    await pool.query("DELETE FROM notifications WHERE user_nick = $1 OR from_user = $1", [nick])
+    await pool.query("DELETE FROM reposts WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
     
     res.sendStatus(200)
@@ -546,19 +849,6 @@ app.get("/api/fact-check/:post_id", async (req, res) => {
   res.json({ factCheck: result.rows[0] })
 })
 
-app.get("/api/fact-check/:post_id", async (req, res) => {
-  const postId = req.params.post_id
-  const result = await pool.query(
-    "SELECT * FROM fact_checks WHERE post_id = $1",
-    [postId]
-  )
-  if (result.rows.length === 0) {
-    return res.json({ factCheck: null })
-  }
-  res.json({ factCheck: result.rows[0] })
-})
-
-// Admin: Add or update fact check
 app.post("/api/admin/fact-check", async (req, res) => {
   const { post_id, admin_message } = req.body
   if (!post_id || !admin_message) return res.sendStatus(400)
@@ -572,13 +862,11 @@ app.post("/api/admin/fact-check", async (req, res) => {
   )
   
   if (existing.rows.length > 0) {
-    // Update existing fact check
     await pool.query(
       "UPDATE fact_checks SET admin_message = $1, updated_at = $2 WHERE post_id = $3",
       [sanitized, Date.now(), post_id]
     )
   } else {
-    // Create new fact check
     await pool.query(
       "INSERT INTO fact_checks(post_id, admin_message, created_at, updated_at) VALUES($1, $2, $3, $4)",
       [post_id, sanitized, Date.now(), Date.now()]
@@ -588,7 +876,6 @@ app.post("/api/admin/fact-check", async (req, res) => {
   res.sendStatus(200)
 })
 
-// Admin: Remove fact check
 app.delete("/api/admin/fact-check/:post_id", async (req, res) => {
   const postId = req.params.post_id
   await pool.query("DELETE FROM fact_checks WHERE post_id = $1", [postId])
@@ -599,6 +886,7 @@ app.delete("/api/admin/post/:id", async (req, res) => {
   const id = req.params.id
   await pool.query("DELETE FROM comments WHERE post_id = $1", [id])
   await pool.query("DELETE FROM reactions WHERE post_id = $1", [id])
+  await pool.query("DELETE FROM reposts WHERE original_post_id = $1", [id])
   await pool.query("DELETE FROM posts WHERE id = $1", [id])
   res.sendStatus(200)
 })
@@ -609,6 +897,9 @@ app.delete("/api/admin/account/:nick", async (req, res) => {
     await pool.query("DELETE FROM reactions WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM comments WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM posts WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM follows WHERE follower = $1 OR following = $1", [nick])
+    await pool.query("DELETE FROM notifications WHERE user_nick = $1 OR from_user = $1", [nick])
+    await pool.query("DELETE FROM reposts WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
     res.sendStatus(200)
   } catch (error) {
