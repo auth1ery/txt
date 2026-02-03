@@ -8,10 +8,17 @@ body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
 #inbox-btn{position:relative}
 #inbox-btn .badge{position:absolute;top:-5px;right:-5px;background:#c44;color:#fff;border-radius:50%;padding:2px 6px;font-size:.7rem;font-weight:bold}
+#notif-btn{position:relative}
+#notif-btn .badge{position:absolute;top:-5px;right:-5px;background:#c44;color:#fff;border-radius:50%;padding:2px 6px;font-size:.7rem;font-weight:bold}
+.feed-toggle{display:flex;gap:.5rem;margin:1rem 0}
+.feed-toggle button{flex:1}
+.feed-toggle button.active{border-color:#eaeaea;color:#fff}
 textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0;box-sizing:border-box}
 button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
 .post{border-bottom:1px solid #222;padding:.5rem 0;position:relative}
+.repost-header{color:#777;font-size:.85rem;margin-bottom:.3rem}
+.repost-header a{color:#888}
 .fact-check-warning{background:#221100;border-left:3px solid #f80;padding:.7rem;margin:.5rem 0;font-size:.85rem;color:#ffaa44;border-radius:.25rem}
 .fact-check-warning strong{color:#ff8800}
 .meta{font-size:.8rem;color:#777;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center}
@@ -35,18 +42,39 @@ a:hover{color:#fff}
 .footer a:hover{color:#eaeaea}
 .greeting-link{color:#eaeaea;text-decoration:underline;text-decoration-style:dotted;text-decoration-color:#444;text-decoration-thickness:1px;text-underline-offset:4px;cursor:pointer}
 .greeting-link:hover{text-decoration:none;color:#888}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:100;justify-content:center;align-items:center}
+.modal.show{display:flex}
+.modal-content{background:#0f0f0f;border:1px solid #333;border-radius:.5rem;padding:1.5rem;max-width:400px;width:90%}
+.modal-content h3{margin-top:0}
+.modal-content button{margin-top:.5rem}
 </style>
 </head>
 <body>
 <div id="app">
 <h2 id="greeting"></h2>
 <button onclick="location.href='/inbox'" id="inbox-btn">inbox</button>
+<button onclick="location.href='/notifications'" id="notif-btn">notifications</button>
+<button onclick="location.href='/discover'">discover</button>
+<div class="feed-toggle">
+  <button id="all-btn" class="active" onclick="switchFeed('all')">all</button>
+  <button id="following-btn" onclick="switchFeed('following')">following</button>
+</div>
 <textarea id="postinput" maxlength="200" placeholder="write"></textarea>
 <button onclick="createpost()">post</button>
 <button onclick="deleteaccount()" style="float:right;color:#c44">delete account</button>
 <div id="posts"></div>
 <button id="more" onclick="load()">more posts</button>
 <button id="refresh" onclick="location.reload()">refresh</button>
+</div>
+
+<div id="repost-modal" class="modal">
+  <div class="modal-content">
+    <h3>repost</h3>
+    <p id="repost-content"></p>
+    <textarea id="repost-comment" maxlength="200" placeholder="add a comment (optional)"></textarea>
+    <button onclick="confirmRepost()">repost</button>
+    <button onclick="closeRepostModal()">cancel</button>
+  </div>
 </div>
 
 <div class="footer">
@@ -61,7 +89,7 @@ if(!localStorage.getItem("nickname")){
   location.href="/"
 }
 
-let nickname=localStorage.getItem("nickname"),offset=0
+let nickname=localStorage.getItem("nickname"),offset=0,currentFeed='all',currentRepostId=null
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -139,8 +167,28 @@ async function checkUnread(){
   }
 }
 
+async function checkUnreadNotifications(){
+  const r = await fetch(`/api/notifications/unread/${nickname}`)
+  const data = await r.json()
+  if(data.count > 0){
+    const btn = document.getElementById('notif-btn')
+    btn.innerHTML = `notifications <span class="badge">${data.count}</span>`
+  }
+}
+
 checkUnread()
+checkUnreadNotifications()
 setInterval(checkUnread, 30000)
+setInterval(checkUnreadNotifications, 30000)
+
+function switchFeed(type) {
+  currentFeed = type
+  document.getElementById('all-btn').classList.toggle('active', type === 'all')
+  document.getElementById('following-btn').classList.toggle('active', type === 'following')
+  document.getElementById('posts').innerHTML = ''
+  offset = 0
+  load()
+}
 
 function escapeHtml(text) {
   const div = document.createElement('div')
@@ -253,6 +301,69 @@ async function reportBoth(postId, postUser){
   toggleMenu(postId)
 }
 
+function sharePost(postId){
+  const url = `${window.location.origin}/post/${postId}`
+  navigator.clipboard.writeText(url).then(() => {
+    alert("Post link copied to clipboard!")
+  }).catch(() => {
+    prompt("Copy this link:", url)
+  })
+  toggleMenu(postId)
+}
+
+function openRepostModal(postId, content){
+  currentRepostId = postId
+  document.getElementById('repost-content').textContent = content
+  document.getElementById('repost-comment').value = ''
+  document.getElementById('repost-modal').classList.add('show')
+}
+
+function closeRepostModal(){
+  document.getElementById('repost-modal').classList.remove('show')
+  currentRepostId = null
+}
+
+async function confirmRepost(){
+  if(!currentRepostId) return
+  
+  const comment = document.getElementById('repost-comment').value.trim()
+  
+  const r = await fetch('/api/repost', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      nickname,
+      post_id: currentRepostId,
+      comment: comment || null
+    })
+  })
+  
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
+  if(r.status === 429){
+    const data = await r.json()
+    alert(data.error || "Too many reposts, slow down!")
+    return
+  }
+  if(!r.ok){
+    alert("Error reposting. Try again.")
+    return
+  }
+  
+  closeRepostModal()
+  alert("Reposted!")
+  
+  const btn = document.querySelector(`[data-post-id="${currentRepostId}"] button[onclick*="openRepostModal"]`)
+  if(btn){
+    const match = btn.textContent.match(/\d+/)
+    const currentCount = match ? parseInt(match[0]) : 0
+    btn.textContent = `repost (${currentCount + 1})`
+  }
+}
+
 function createcommentdiv(c){
   const div=document.createElement("div")
   div.className="comment"
@@ -266,11 +377,11 @@ function createcommentdiv(c){
 }
 
 async function load(){
-  const r=await fetch("/api/posts?offset="+offset)
+  const url = `/api/posts?offset=${offset}&feed=${currentFeed}&nickname=${nickname}`
+  const r=await fetch(url)
   const d=await r.json()
   const el=document.getElementById("posts")
   
-  // Create a map of fact checks by post_id
   const factCheckMap = {}
   if (d.factChecks) {
     d.factChecks.forEach(fc => {
@@ -278,9 +389,17 @@ async function load(){
     })
   }
   
+  const repostMap = {}
+  if (d.reposts) {
+    d.reposts.forEach(rp => {
+      repostMap[rp.original_post_id] = rp.count
+    })
+  }
+  
   d.posts.forEach(p=>{
     const commentCount = d.comments.filter(c=>c.post_id===p.id).length
     const factCheck = factCheckMap[p.id]
+    const repostCount = repostMap[p.id] || 0
     
     const div=document.createElement("div")
     div.className="post"
@@ -288,12 +407,13 @@ async function load(){
     
     let postHTML = `<div>${processContent(p.content)}</div>`
     
-    // Add fact check warning if it exists
     if (factCheck) {
       postHTML += `<div class="fact-check-warning">
-        <strong>⚠️ Fact Check:</strong> ${escapeHtml(factCheck.admin_message)}
+        <strong>fact check:</strong> ${escapeHtml(factCheck.admin_message)}
       </div>`
     }
+    
+    const escapedContent = p.content.replace(/'/g, "\\'").replace(/"/g, "&quot;")
     
     postHTML += `<div class="meta">
         <a href="/profile/${p.nickname}">@${p.nickname}</a>
@@ -302,9 +422,11 @@ async function load(){
         <button onclick="react(${p.id},1)">+</button>
         <button onclick="react(${p.id},-1)">-</button>
         <button onclick="togglecomments(${p.id})">comments (${commentCount})</button>
+        <button onclick="openRepostModal(${p.id}, '${escapedContent}')">repost (${repostCount})</button>
         <div class="menu">
           <button class="dots" onclick="toggleMenu(${p.id})">⋯</button>
           <div id="menu${p.id}" class="dropdown">
+            <button onclick="sharePost(${p.id})">Share Post</button>
             <button onclick="reportPost(${p.id}, '${p.nickname}')">Report Post</button>
             <button onclick="reportUser(${p.id}, '${p.nickname}')">Report User</button>
             <button onclick="reportBoth(${p.id}, '${p.nickname}')">Report Both</button>
