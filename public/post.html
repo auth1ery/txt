@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>post - txt</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+.post{border:1px solid #333;border-radius:.5rem;padding:1rem;margin-bottom:1rem}
+.post-content{font-size:1.1rem;margin-bottom:1rem}
+.fact-check-warning{background:#221100;border-left:3px solid #f80;padding:.7rem;margin:.5rem 0;font-size:.85rem;color:#ffaa44;border-radius:.25rem}
+.fact-check-warning strong{color:#ff8800}
+.meta{font-size:.85rem;color:#777;display:flex;flex-wrap:wrap;gap:.5rem;align-items:center;margin-top:1rem}
+.comment{border-bottom:1px solid #222;padding:.75rem 0;font-size:.9rem}
+.comment-author{color:#4c4;font-weight:bold}
+.comment-time{font-size:.8rem;color:#777;margin-left:.5rem}
+.reply-box{display:flex;gap:.5rem;margin-top:.5rem}
+input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;box-sizing:border-box}
+a{color:#777;text-decoration:none}
+a:hover{color:#fff}
+.mention{color:#4c4;font-weight:bold}
+.external-link{color:#88f}
+.back-btn{margin-bottom:1rem}
+.menu{position:relative;display:inline-block}
+.dots{background:none;border:none;color:#777;font-size:1.2rem;cursor:pointer;padding:0 .5rem}
+.dots:hover{color:#fff}
+.dropdown{display:none;position:absolute;background:#111;border:1px solid #333;border-radius:.25rem;padding:.5rem;min-width:180px;right:0;z-index:10}
+.dropdown.show{display:block}
+.dropdown button{display:block;width:100%;text-align:left;margin:.2rem 0;padding:.4rem}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.8);z-index:100;justify-content:center;align-items:center}
+.modal.show{display:flex}
+.modal-content{background:#0f0f0f;border:1px solid #333;border-radius:.5rem;padding:1.5rem;max-width:400px;width:90%}
+.modal-content h3{margin-top:0}
+.modal-content button{margin-top:.5rem}
+.modal-content textarea{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.5rem 0;box-sizing:border-box}
+</style>
+</head>
+<body>
+<div id="app">
+<button class="back-btn" onclick="location.href='/feed'">← back to feed</button>
+<div id="post-container"></div>
+<h3>comments</h3>
+<div class="reply-box">
+  <input id="comment-input" maxlength="100" placeholder="add a comment">
+  <button onclick="addComment()">send</button>
+</div>
+<div id="comments"></div>
+</div>
+
+<div id="repost-modal" class="modal">
+  <div class="modal-content">
+    <h3>repost</h3>
+    <p id="repost-content"></p>
+    <textarea id="repost-comment" maxlength="200" placeholder="add a comment (optional)"></textarea>
+    <button onclick="confirmRepost()">repost</button>
+    <button onclick="closeRepostModal()">cancel</button>
+  </div>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname = localStorage.getItem("nickname")
+const postId = window.location.pathname.split('/').pop()
+let postData = null
+let currentRepostId = null
+
+function escapeHtml(text) {
+  const div = document.createElement('div')
+  div.textContent = text
+  return div.innerHTML
+}
+
+function processContent(text) {
+  text = escapeHtml(text)
+  text = text.replace(/@(\w+)/g, '<a href="/profile/$1" class="mention">@$1</a>')
+  const urlRegex = /(https?:\/\/[^\s]+)/g
+  text = text.replace(urlRegex, (url) => {
+    const escaped = url.replace(/'/g, '&#39;')
+    return `<a href="#" onclick="confirmLink('${escaped}'); return false" class="external-link">${url}</a>`
+  })
+  return text
+}
+
+function confirmLink(url) {
+  if (confirm("You're going to go OUTSIDE of txt. Make sure you trust the link before you proceed!\n\nGo to: " + url)) {
+    window.open(url, '_blank')
+  }
+}
+
+function timeago(t){
+  const s=Math.floor((Date.now()-t)/1000)
+  if(s<60) return s+"s ago"
+  const m=Math.floor(s/60)
+  if(m<60) return m+"m ago"
+  const h=Math.floor(m/60)
+  if(h<24) return h+"h ago"
+  const d=Math.floor(h/24)
+  if(d<7) return d+"d ago"
+  return Math.floor(d/7)+"w ago"
+}
+
+function toggleMenu(id){
+  const menu = document.getElementById("menu"+id)
+  document.querySelectorAll('.dropdown').forEach(d => {
+    if(d.id !== "menu"+id) d.classList.remove("show")
+  })
+  menu.classList.toggle("show")
+}
+
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.menu')) {
+    document.querySelectorAll('.dropdown').forEach(d => d.classList.remove("show"))
+  }
+})
+
+function sharePost(postId){
+  const url = `${window.location.origin}/post/${postId}`
+  navigator.clipboard.writeText(url).then(() => {
+    alert("Post link copied to clipboard!")
+  }).catch(() => {
+    prompt("Copy this link:", url)
+  })
+  toggleMenu(postId)
+}
+
+function openRepostModal(postId, content){
+  currentRepostId = postId
+  document.getElementById('repost-content').textContent = content
+  document.getElementById('repost-comment').value = ''
+  document.getElementById('repost-modal').classList.add('show')
+}
+
+function closeRepostModal(){
+  document.getElementById('repost-modal').classList.remove('show')
+  currentRepostId = null
+}
+
+async function confirmRepost(){
+  if(!currentRepostId) return
+  
+  const comment = document.getElementById('repost-comment').value.trim()
+  
+  const r = await fetch('/api/repost', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      nickname,
+      post_id: currentRepostId,
+      comment: comment || null
+    })
+  })
+  
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
+  if(r.status === 429){
+    const data = await r.json()
+    alert(data.error || "Too many reposts, slow down!")
+    return
+  }
+  if(!r.ok){
+    alert("Error reposting. Try again.")
+    return
+  }
+  
+  closeRepostModal()
+  alert("Reposted!")
+  loadPost()
+}
+
+async function reportPost(postId, postUser){
+  const reason = prompt("What's the reason for reporting this post?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: nickname,
+      type: 'post',
+      target_user: postUser,
+      target_post: postId,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu(postId)
+}
+
+async function reportUser(postId, postUser){
+  const reason = prompt("What's the reason for reporting this user?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: nickname,
+      type: 'user',
+      target_user: postUser,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu(postId)
+}
+
+async function reportBoth(postId, postUser){
+  const reason = prompt("What's the reason for reporting this user and post?")
+  if(!reason) return
+  
+  await fetch('/api/report', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      reporter: nickname,
+      type: 'both',
+      target_user: postUser,
+      target_post: postId,
+      reason
+    })
+  })
+  
+  alert("Great! Human moderators will review it shortly.")
+  toggleMenu(postId)
+}
+
+async function loadPost(){
+  const r = await fetch(`/api/post/${postId}`)
+  if(r.status === 404){
+    document.getElementById('post-container').innerHTML = '<p style="color:#c44">Post not found</p>'
+    return
+  }
+  
+  const data = await r.json()
+  postData = data
+  
+  const p = data.post
+  const escapedContent = p.content.replace(/'/g, "\\'").replace(/"/g, "&quot;")
+  
+  let postHTML = `
+    <div class="post">
+      <div class="post-content">${processContent(p.content)}</div>
+  `
+  
+  if(data.factCheck){
+    postHTML += `<div class="fact-check-warning">
+      <strong>fact check:</strong> ${escapeHtml(data.factCheck.admin_message)}
+    </div>`
+  }
+  
+  postHTML += `
+      <div class="meta">
+        <a href="/profile/${p.nickname}">@${p.nickname}</a>
+        <span>${timeago(p.created_at)}</span>
+        <span>score: <span id="score">${p.score}</span></span>
+        <button onclick="react(1)">+</button>
+        <button onclick="react(-1)">-</button>
+        <button onclick="openRepostModal(${p.id}, '${escapedContent}')">repost (${data.repostCount})</button>
+        <div class="menu">
+          <button class="dots" onclick="toggleMenu(${p.id})">⋯</button>
+          <div id="menu${p.id}" class="dropdown">
+            <button onclick="sharePost(${p.id})">Share Post</button>
+            <button onclick="reportPost(${p.id}, '${p.nickname}')">Report Post</button>
+            <button onclick="reportUser(${p.id}, '${p.nickname}')">Report User</button>
+            <button onclick="reportBoth(${p.id}, '${p.nickname}')">Report Both</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  `
+  
+  document.getElementById('post-container').innerHTML = postHTML
+  
+  const commentsEl = document.getElementById('comments')
+  commentsEl.innerHTML = ''
+  
+  data.comments.forEach(c => {
+    const div = document.createElement('div')
+    div.className = 'comment'
+    div.innerHTML = `
+      <span class="comment-author">@${c.nickname}</span>
+      <span class="comment-time">${timeago(c.created_at)}</span>
+      <div>${processContent(c.content)}</div>
+    `
+    commentsEl.appendChild(div)
+  })
+}
+
+async function react(value){
+  const r = await fetch('/api/react', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({nickname, post_id: postId, value})
+  })
+  
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
+  
+  const data = await r.json()
+  document.getElementById('score').textContent = data.score
+}
+
+async function addComment(){
+  const input = document.getElementById('comment-input')
+  if(!input.value.trim()) return
+  
+  const r = await fetch('/api/comments', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      nickname,
+      post_id: postId,
+      content: input.value
+    })
+  })
+  
+  if(r.status === 403){
+    alert("You're banned!")
+    location.href = '/banned'
+    return
+  }
+  if(r.status === 429){
+    const data = await r.json()
+    alert(data.error || "Too many comments, slow down!")
+    return
+  }
+  if(!r.ok){
+    alert("Error commenting. Try again.")
+    return
+  }
+  
+  input.value = ''
+  loadPost()
+}
+
+loadPost()
+</script>
+</body>
+</html>
