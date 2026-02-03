@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>notifications - txt</title>
+<style>
+body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
+#app{max-width:600px;margin:auto;padding:1rem}
+button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
+button:hover{border-color:#eaeaea;color:#fff}
+.notif{border-bottom:1px solid #222;padding:.75rem 0;display:flex;justify-content:space-between;align-items:center}
+.notif.unread{border-left:3px solid #4c4;padding-left:.5rem}
+.notif-content{flex:1}
+.notif-icon{font-size:1.2rem;margin-right:.5rem}
+.notif-text{color:#aaa}
+.notif-time{font-size:.8rem;color:#777;margin-top:.3rem}
+a{color:#4c4;text-decoration:none;font-weight:bold}
+a:hover{color:#6e6}
+.back-btn{margin-bottom:1rem}
+.empty{text-align:center;color:#777;padding:2rem}
+.mark-all{float:right}
+</style>
+</head>
+<body>
+<div id="app">
+<button class="back-btn" onclick="location.href='/feed'">← back to feed</button>
+<h2>notifications</h2>
+<button class="mark-all" onclick="markAllRead()">mark all read</button>
+<div id="notifications"></div>
+<div id="empty" class="empty hidden">no notifications yet...</div>
+</div>
+
+<script>
+if(!localStorage.getItem("nickname")){
+  location.href="/"
+}
+
+const nickname = localStorage.getItem("nickname")
+
+function timeago(t){
+  const s=Math.floor((Date.now()-t)/1000)
+  if(s<60) return s+"s ago"
+  const m=Math.floor(s/60)
+  if(m<60) return m+"m ago"
+  const h=Math.floor(m/60)
+  if(h<24) return h+"h ago"
+  const d=Math.floor(h/24)
+  if(d<7) return d+"d ago"
+  return Math.floor(d/7)+"w ago"
+}
+
+function getNotifIcon(type){
+  switch(type){
+    case 'mention': return '@'
+    case 'reply': return '💬'
+    case 'follow': return '👤'
+    case 'repost': return '🔁'
+    default: return '·'
+  }
+}
+
+function getNotifText(notif){
+  switch(notif.type){
+    case 'mention':
+      return `<a href="/profile/${notif.from_user}">@${notif.from_user}</a> mentioned you in a post`
+    case 'reply':
+      return `<a href="/profile/${notif.from_user}">@${notif.from_user}</a> replied to your post`
+    case 'follow':
+      return `<a href="/profile/${notif.from_user}">@${notif.from_user}</a> followed you`
+    case 'repost':
+      return `<a href="/profile/${notif.from_user}">@${notif.from_user}</a> reposted your post`
+    default:
+      return `notification from <a href="/profile/${notif.from_user}">@${notif.from_user}</a>`
+  }
+}
+
+async function loadNotifications(){
+  const r = await fetch(`/api/notifications/${nickname}`)
+  const data = await r.json()
+  const el = document.getElementById("notifications")
+  
+  if(data.notifications.length === 0){
+    document.getElementById('empty').classList.remove('hidden')
+    return
+  }
+  
+  for(const notif of data.notifications){
+    const div = document.createElement("div")
+    div.className = notif.read ? 'notif' : 'notif unread'
+    div.dataset.notifId = notif.id
+    
+    const link = notif.post_id ? `onclick="goToPost(${notif.post_id}, ${notif.id})" style="cursor:pointer"` : ''
+    
+    div.innerHTML = `
+      <div class="notif-content" ${link}>
+        <span class="notif-icon">${getNotifIcon(notif.type)}</span>
+        <span class="notif-text">${getNotifText(notif)}</span>
+        <div class="notif-time">${timeago(notif.created_at)}</div>
+      </div>
+    `
+    
+    el.appendChild(div)
+    
+    if(!notif.read){
+      markAsRead(notif.id)
+    }
+  }
+}
+
+async function markAsRead(id){
+  await fetch(`/api/notifications/read/${id}`, {
+    method: 'POST'
+  })
+}
+
+async function markAllRead(){
+  await fetch(`/api/notifications/read-all/${nickname}`, {
+    method: 'POST'
+  })
+  document.querySelectorAll('.notif.unread').forEach(el => {
+    el.classList.remove('unread')
+  })
+}
+
+function goToPost(postId, notifId){
+  markAsRead(notifId)
+  location.href = `/post/${postId}`
+}
+
+loadNotifications()
+</script>
+</body>
+</html>
