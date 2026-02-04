@@ -7,7 +7,7 @@
 ![github forks](https://img.shields.io/github/forks/auth1ery/txt?style=social)
 ![made with love](https://img.shields.io/badge/made%20with-♥-red)
 
-txt is a simple and lightweight social media designed for anyone and any browser.
+txt is a simple and lightweight social media platform designed for anyone and any browser.
 its very small in size of the source code and the backend is built to use as little CPU and RAM as possible
 
 # features
