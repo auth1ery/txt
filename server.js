@@ -43,6 +43,56 @@ const authLimiter = rateLimit({
 
 app.use(express.json())
 
+// RSS feed caches
+const rssFeedCache = {
+  global: { data: null, timestamp: 0 },
+  users: new Map()
+}
+const RSS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+
+// HTML escape for RSS feeds
+function escapeHtml(text) {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
+// Generate RSS XML
+function generateRSSFeed(posts, title, description, link) {
+  const items = posts.map(post => {
+    const postLink = `${link}/post/${post.id}`
+    const pubDate = new Date(post.created_at).toUTCString()
+    const content = escapeHtml(post.content)
+    const author = escapeHtml(post.nickname)
+    
+    return `
+    <item>
+      <title>${author}: ${content.substring(0, 50)}${content.length > 50 ? '...' : ''}</title>
+      <link>${postLink}</link>
+      <description>${content}</description>
+      <author>@${author}</author>
+      <pubDate>${pubDate}</pubDate>
+      <guid isPermaLink="true">${postLink}</guid>
+    </item>`
+  }).join('')
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>${escapeHtml(title)}</title>
+    <link>${link}</link>
+    <description>${escapeHtml(description)}</description>
+    <language>en</language>
+    <lastBuildDate>${new Date().toUTCString()}</lastBuildDate>
+    <atom:link href="${link}/rss.xml" rel="self" type="application/rss+xml" />
+    ${items}
+  </channel>
+</rss>`
+}
+
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "landing.html"))
 })
@@ -121,6 +171,99 @@ app.get("/verify-rng", async (req, res) => {
   const { token } = req.query
   if (!token) return res.status(400).send("Missing token")
   res.sendFile(path.join(__dirname, "public", "verify-rng.html"))
+})
+
+// Global RSS feed
+app.get("/rss.xml", async (req, res) => {
+  try {
+    const now = Date.now()
+    
+    if (rssFeedCache.global.data && (now - rssFeedCache.global.timestamp) < RSS_CACHE_TTL) {
+      res.set('Content-Type', 'application/rss+xml')
+      res.set('Cache-Control', 'public, max-age=300')
+      return res.send(rssFeedCache.global.data)
+    }
+    
+    const result = await pool.query(`
+      SELECT p.id, p.nickname, p.content, p.created_at
+      FROM posts p
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `)
+    
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+    const rssXml = generateRSSFeed(
+      result.rows,
+      'txt - global feed',
+      'Latest posts from txt social network',
+      baseUrl
+    )
+    
+    rssFeedCache.global = { data: rssXml, timestamp: now }
+    
+    res.set('Content-Type', 'application/rss+xml')
+    res.set('Cache-Control', 'public, max-age=300')
+    res.send(rssXml)
+    
+  } catch (error) {
+    console.error('RSS feed error:', error)
+    res.status(500).send('Error generating RSS feed')
+  }
+})
+
+// User RSS feed
+app.get("/rss/:nickname.xml", async (req, res) => {
+  try {
+    const nickname = req.params.nickname.toLowerCase()
+    const now = Date.now()
+    
+    const cachedFeed = rssFeedCache.users.get(nickname)
+    if (cachedFeed && (now - cachedFeed.timestamp) < RSS_CACHE_TTL) {
+      res.set('Content-Type', 'application/rss+xml')
+      res.set('Cache-Control', 'public, max-age=300')
+      return res.send(cachedFeed.data)
+    }
+    
+    const userCheck = await pool.query(
+      "SELECT nickname FROM users WHERE nickname = $1",
+      [nickname]
+    )
+    
+    if (userCheck.rows.length === 0) {
+      return res.status(404).send('User not found')
+    }
+    
+    const result = await pool.query(`
+      SELECT p.id, p.nickname, p.content, p.created_at
+      FROM posts p
+      WHERE p.nickname = $1
+      ORDER BY p.created_at DESC
+      LIMIT 50
+    `, [nickname])
+    
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+    const rssXml = generateRSSFeed(
+      result.rows,
+      `txt - @${nickname}'s posts`,
+      `Latest posts from @${nickname} on txt`,
+      `${baseUrl}/profile/${nickname}`
+    )
+    
+    rssFeedCache.users.set(nickname, { data: rssXml, timestamp: now })
+    
+    if (rssFeedCache.users.size > 100) {
+      const firstKey = rssFeedCache.users.keys().next().value
+      rssFeedCache.users.delete(firstKey)
+    }
+    
+    res.set('Content-Type', 'application/rss+xml')
+    res.set('Cache-Control', 'public, max-age=300')
+    res.send(rssXml)
+    
+  } catch (error) {
+    console.error('RSS feed error:', error)
+    res.status(500).send('Error generating RSS feed')
+  }
 })
 
 app.use(express.static("public"))
@@ -414,6 +557,10 @@ app.post("/api/posts", postLimiter, async (req, res) => {
     "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
     [nickname, sanitized, Date.now()]
   )
+  
+  // Invalidate RSS caches
+  rssFeedCache.global.timestamp = 0
+  rssFeedCache.users.delete(nickname.toLowerCase())
   
   const mentions = sanitized.match(/@(\w+)/g)
   if (mentions) {
@@ -757,6 +904,9 @@ app.delete("/api/account/:nick", async (req, res) => {
     await pool.query("DELETE FROM reposts WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
     
+    // Invalidate RSS cache for user
+    rssFeedCache.users.delete(nick)
+    
     res.sendStatus(200)
   } catch (error) {
     console.error(error)
@@ -896,6 +1046,10 @@ app.delete("/api/admin/post/:id", async (req, res) => {
   await pool.query("DELETE FROM reactions WHERE post_id = $1", [id])
   await pool.query("DELETE FROM reposts WHERE original_post_id = $1", [id])
   await pool.query("DELETE FROM posts WHERE id = $1", [id])
+  
+  // Invalidate global RSS cache when admin deletes posts
+  rssFeedCache.global.timestamp = 0
+  
   res.sendStatus(200)
 })
 
@@ -909,6 +1063,11 @@ app.delete("/api/admin/account/:nick", async (req, res) => {
     await pool.query("DELETE FROM notifications WHERE user_nick = $1 OR from_user = $1", [nick])
     await pool.query("DELETE FROM reposts WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
+    
+    // Invalidate RSS caches
+    rssFeedCache.global.timestamp = 0
+    rssFeedCache.users.delete(nick)
+    
     res.sendStatus(200)
   } catch (error) {
     console.error(error)
