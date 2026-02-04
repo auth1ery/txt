@@ -25,6 +25,9 @@ a:hover{color:#fff}
 .stat-card{border:1px solid #222;border-radius:.5rem;padding:1rem;text-align:center}
 .stat-value{font-size:1.5rem;color:#eaeaea;font-weight:bold}
 .stat-label{font-size:.85rem;color:#777;margin-top:.3rem}
+.rss-link{margin-top:1rem;text-align:center}
+.rss-link a{color:#f80;text-decoration:none;font-size:.9rem}
+.rss-link a:hover{color:#fa0}
 </style>
 </head>
 <body>
@@ -42,6 +45,9 @@ a:hover{color:#fff}
       <span id="timezone"></span>
     </div>
     <div class="profile-bio" id="bio"></div>
+    <div class="rss-link">
+      <a href="#" onclick="copyRSS(); return false" title="Copy RSS feed URL">📡 RSS feed</a>
+    </div>
   </div>
   <div>
     <button id="follow-btn" class="hidden" onclick="toggleFollow()">follow</button>
@@ -62,7 +68,12 @@ a:hover{color:#fff}
     </div>
     <div class="stat-card">
       <div class="stat-value" id="controversy">0%</div>
-      <div class="stat-label">approval</div>
+      <div class="stat-label">
+        approval
+        <div style="font-size:.75rem;margin-top:.2rem;color:#555">
+          <span id="upvote-count">0</span>↑ <span id="downvote-count">0</span>↓
+        </div>
+      </div>
     </div>
     <div class="stat-card">
       <div class="stat-value" id="join-num">#0</div>
@@ -95,6 +106,15 @@ function showFollowing(){
   location.href = `/profile/${profileNick}/following`
 }
 
+function copyRSS(){
+  const rssUrl = `${window.location.origin}/rss/${profileNick}.xml`
+  navigator.clipboard.writeText(rssUrl).then(() => {
+    alert("RSS feed URL copied to clipboard!")
+  }).catch(() => {
+    prompt("Copy this RSS feed URL:", rssUrl)
+  })
+}
+
 async function loadProfile(){
   const r = await fetch(`/api/profile/${profileNick}`)
   if(r.status === 404){
@@ -113,6 +133,8 @@ async function loadProfile(){
   document.getElementById('post-count').textContent = data.posts
   document.getElementById('comment-count').textContent = data.comments
   document.getElementById('controversy').textContent = data.controversyScore + '%'
+  document.getElementById('upvote-count').textContent = data.upvotes || 0
+  document.getElementById('downvote-count').textContent = data.downvotes || 0
   document.getElementById('join-num').textContent = '#' + data.joinNumber
   
   if(data.lastPost){
