@@ -28,6 +28,12 @@ a:hover{color:#fff}
 .rss-link{margin-top:1rem;text-align:center}
 .rss-link a{color:#f80;text-decoration:none;font-size:.9rem}
 .rss-link a:hover{color:#fa0}
+.activity-card{border:1px solid #222;border-radius:.5rem;padding:1rem}
+.activity-status{color:#777;font-size:.85rem}
+.activity-status.online{color:#4c4}
+.activity-content{color:#eaeaea;margin-top:.5rem;font-size:.95rem}
+.activity-platform{color:#888;font-size:.8rem;margin-top:.3rem}
+.hidden{display:none}
 </style>
 </head>
 <body>
@@ -52,6 +58,15 @@ a:hover{color:#fff}
   <div>
     <button id="follow-btn" class="hidden" onclick="toggleFollow()">follow</button>
     <button id="edit-btn" class="hidden" onclick="location.href='/settings'">edit profile</button>
+  </div>
+</div>
+
+<div class="section">
+  <h3>activity</h3>
+  <div class="activity-card">
+    <div class="activity-status" id="activity-status">offline</div>
+    <div class="activity-content" id="activity-content"></div>
+    <div class="activity-platform" id="activity-platform"></div>
   </div>
 </div>
 
@@ -115,6 +130,43 @@ function copyRSS(){
   })
 }
 
+async function loadActivity(){
+  try {
+    const r = await fetch(`/api/activity/${profileNick}`)
+    const data = await r.json()
+    
+    const statusEl = document.getElementById('activity-status')
+    const contentEl = document.getElementById('activity-content')
+    const platformEl = document.getElementById('activity-platform')
+    
+    if(data.status === 'offline' || !data.activity_type){
+      statusEl.textContent = 'offline'
+      statusEl.classList.remove('online')
+      contentEl.textContent = ''
+      platformEl.textContent = ''
+      return
+    }
+    
+    statusEl.textContent = 'online'
+    statusEl.classList.add('online')
+    
+    let verb = ''
+    if(data.activity_type === 'watching') verb = 'watching'
+    else if(data.activity_type === 'listening') verb = 'listening to'
+    else verb = 'browsing'
+    
+    if(data.platform){
+      contentEl.textContent = data.title || 'untitled'
+      platformEl.textContent = `${verb} on ${data.platform}`
+    } else {
+      contentEl.textContent = data.title || 'browsing'
+      platformEl.textContent = verb
+    }
+  } catch(e) {
+    document.getElementById('activity-status').textContent = 'offline'
+  }
+}
+
 async function loadProfile(){
   const r = await fetch(`/api/profile/${profileNick}`)
   if(r.status === 404){
@@ -151,6 +203,8 @@ async function loadProfile(){
     document.getElementById('follow-btn').classList.remove('hidden')
     checkFollowStatus()
   }
+  
+  loadActivity()
 }
 
 async function checkFollowStatus(){
@@ -219,6 +273,7 @@ function timeago(t){
 }
 
 loadProfile()
+setInterval(loadActivity, 10000)
 </script>
 </body>
 </html>
