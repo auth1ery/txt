@@ -43,14 +43,12 @@ const authLimiter = rateLimit({
 
 app.use(express.json())
 
-// RSS feed caches
 const rssFeedCache = {
   global: { data: null, timestamp: 0 },
   users: new Map()
 }
-const RSS_CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+const RSS_CACHE_TTL = 5 * 60 * 1000
 
-// HTML escape for RSS feeds
 function escapeHtml(text) {
   return text
     .replace(/&/g, '&amp;')
@@ -60,7 +58,6 @@ function escapeHtml(text) {
     .replace(/'/g, '&#39;')
 }
 
-// Generate RSS XML
 function generateRSSFeed(posts, title, description, link) {
   const items = posts.map(post => {
     const postLink = `${link}/post/${post.id}`
@@ -173,7 +170,6 @@ app.get("/verify-rng", async (req, res) => {
   res.sendFile(path.join(__dirname, "public", "verify-rng.html"))
 })
 
-// Global RSS feed
 app.get("/rss.xml", async (req, res) => {
   try {
     const now = Date.now()
@@ -211,7 +207,6 @@ app.get("/rss.xml", async (req, res) => {
   }
 })
 
-// User RSS feed
 app.get("/rss/:nickname.xml", async (req, res) => {
   try {
     const nickname = req.params.nickname.toLowerCase()
@@ -361,6 +356,15 @@ async function initDB() {
       admin_message TEXT,
       created_at BIGINT,
       updated_at BIGINT
+    );
+
+    CREATE TABLE IF NOT EXISTS user_activity (
+      nickname TEXT PRIMARY KEY,
+      activity_type TEXT,
+      title TEXT,
+      url TEXT,
+      platform TEXT,
+      timestamp BIGINT
     );
     
     DO $$ 
@@ -558,7 +562,6 @@ app.post("/api/posts", postLimiter, async (req, res) => {
     [nickname, sanitized, Date.now()]
   )
   
-  // Invalidate RSS caches
   rssFeedCache.global.timestamp = 0
   rssFeedCache.users.delete(nickname.toLowerCase())
   
@@ -902,9 +905,9 @@ app.delete("/api/account/:nick", async (req, res) => {
     await pool.query("DELETE FROM follows WHERE follower = $1 OR following = $1", [nick])
     await pool.query("DELETE FROM notifications WHERE user_nick = $1 OR from_user = $1", [nick])
     await pool.query("DELETE FROM reposts WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM user_activity WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
     
-    // Invalidate RSS cache for user
     rssFeedCache.users.delete(nick)
     
     res.sendStatus(200)
@@ -1047,7 +1050,6 @@ app.delete("/api/admin/post/:id", async (req, res) => {
   await pool.query("DELETE FROM reposts WHERE original_post_id = $1", [id])
   await pool.query("DELETE FROM posts WHERE id = $1", [id])
   
-  // Invalidate global RSS cache when admin deletes posts
   rssFeedCache.global.timestamp = 0
   
   res.sendStatus(200)
@@ -1062,9 +1064,9 @@ app.delete("/api/admin/account/:nick", async (req, res) => {
     await pool.query("DELETE FROM follows WHERE follower = $1 OR following = $1", [nick])
     await pool.query("DELETE FROM notifications WHERE user_nick = $1 OR from_user = $1", [nick])
     await pool.query("DELETE FROM reposts WHERE nickname = $1", [nick])
+    await pool.query("DELETE FROM user_activity WHERE nickname = $1", [nick])
     await pool.query("DELETE FROM users WHERE nickname = $1", [nick])
     
-    // Invalidate RSS caches
     rssFeedCache.global.timestamp = 0
     rssFeedCache.users.delete(nick)
     
@@ -1195,6 +1197,51 @@ app.post("/api/admin/broadcast", async (req, res) => {
   }
   
   res.sendStatus(200)
+})
+
+app.post("/api/activity", async (req, res) => {
+  const nickname = req.body.nickname
+  if (!nickname) return res.sendStatus(401)
+  
+  const userCheck = await pool.query("SELECT nickname FROM users WHERE nickname = $1", [nickname.toLowerCase()])
+  if (userCheck.rows.length === 0) return res.sendStatus(401)
+  
+  const ban = await checkBan(nickname.toLowerCase())
+  if (ban) return res.status(403).json({ banned: true })
+  
+  const activity = req.body
+  
+  await pool.query(
+    `INSERT INTO user_activity(nickname, activity_type, title, url, platform, timestamp) 
+     VALUES($1, $2, $3, $4, $5, $6)
+     ON CONFLICT (nickname) DO UPDATE 
+     SET activity_type = $2, title = $3, url = $4, platform = $5, timestamp = $6`,
+    [
+      nickname.toLowerCase(),
+      activity.type || 'browsing',
+      activity.title || null,
+      activity.url || null,
+      activity.mediaInfo?.platform || null,
+      Date.now()
+    ]
+  )
+  
+  res.sendStatus(200)
+})
+
+app.get("/api/activity/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  
+  const result = await pool.query(
+    "SELECT * FROM user_activity WHERE nickname = $1 AND timestamp > $2",
+    [nickname, Date.now() - 30000]
+  )
+  
+  if (result.rows.length === 0) {
+    return res.json({ status: 'offline' })
+  }
+  
+  res.json(result.rows[0])
 })
 
 app.listen(PORT, () => {
