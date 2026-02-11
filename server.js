@@ -5,6 +5,7 @@ import { fileURLToPath } from "url"
 import { containsProfanity } from "./filter.js"
 import rateLimit from "express-rate-limit"
 import sanitizeHtml from "sanitize-html"
+import fs from "fs"
 
 const __filename = fileURLToPath(import.meta.url)
 const __dirname = path.dirname(__filename)
@@ -90,36 +91,172 @@ function generateRSSFeed(posts, title, description, link) {
 </rss>`
 }
 
+function generateOGHtml(htmlPath, ogData) {
+  let html = fs.readFileSync(path.join(__dirname, "public", htmlPath), 'utf8')
+  
+  const ogTags = `
+<meta property="og:title" content="${escapeHtml(ogData.title)}">
+<meta property="og:description" content="${escapeHtml(ogData.description)}">
+<meta property="og:type" content="${ogData.type || 'website'}">
+<meta property="og:url" content="${ogData.url}">
+<meta property="og:site_name" content="txt">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="${escapeHtml(ogData.title)}">
+<meta name="twitter:description" content="${escapeHtml(ogData.description)}">
+`
+  
+  html = html.replace('</title>', `</title>${ogTags}`)
+  return html
+}
+
 app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "landing.html"))
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("landing.html", {
+    title: "txt - a minimalist social network",
+    description: "Join txt, a simple text-based social network",
+    type: "website",
+    url: baseUrl
+  })
+  res.send(html)
 })
 
 app.get("/feed", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "index.html"))
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("index.html", {
+    title: "txt feed",
+    description: "Read the latest posts on txt",
+    type: "website",
+    url: `${baseUrl}/feed`
+  })
+  res.send(html)
 })
 
-app.get("/profile/:nick", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "profile.html"))
+app.get("/profile/:nick", async (req, res) => {
+  try {
+    const nick = req.params.nick.toLowerCase()
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+    
+    const userResult = await pool.query("SELECT * FROM users WHERE nickname = $1", [nick])
+    
+    if (userResult.rows.length === 0) {
+      return res.sendFile(path.join(__dirname, "public", "profile.html"))
+    }
+    
+    const user = userResult.rows[0]
+    const bio = user.bio || 'A txt user'
+    
+    const html = generateOGHtml("profile.html", {
+      title: `@${nick} on txt`,
+      description: bio,
+      type: "profile",
+      url: `${baseUrl}/profile/${nick}`
+    })
+    
+    res.send(html)
+  } catch (error) {
+    res.sendFile(path.join(__dirname, "public", "profile.html"))
+  }
 })
 
-app.get("/post/:id", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "post.html"))
+app.get("/post/:id", async (req, res) => {
+  try {
+    const id = req.params.id
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+    
+    const postResult = await pool.query(`
+      SELECT p.*, COALESCE(SUM(r.value), 0) as score
+      FROM posts p
+      LEFT JOIN reactions r ON p.id = r.post_id
+      WHERE p.id = $1
+      GROUP BY p.id
+    `, [id])
+    
+    if (postResult.rows.length === 0) {
+      return res.sendFile(path.join(__dirname, "public", "post.html"))
+    }
+    
+    const post = postResult.rows[0]
+    const content = post.content.substring(0, 200)
+    
+    const html = generateOGHtml("post.html", {
+      title: `@${post.nickname} on txt`,
+      description: content,
+      type: "article",
+      url: `${baseUrl}/post/${id}`
+    })
+    
+    res.send(html)
+  } catch (error) {
+    res.sendFile(path.join(__dirname, "public", "post.html"))
+  }
 })
 
 app.get("/discover", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "discover.html"))
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("discover.html", {
+    title: "discover - txt",
+    description: "Find new people to follow on txt",
+    type: "website",
+    url: `${baseUrl}/discover`
+  })
+  res.send(html)
 })
 
 app.get("/notifications", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "notifications.html"))
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("notifications.html", {
+    title: "notifications - txt",
+    description: "Your txt notifications",
+    type: "website",
+    url: `${baseUrl}/notifications`
+  })
+  res.send(html)
 })
 
 app.get("/profile/:nick/followers", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "followers.html"))
+  const nick = req.params.nick
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("followers.html", {
+    title: `@${nick}'s followers - txt`,
+    description: `People following @${nick} on txt`,
+    type: "website",
+    url: `${baseUrl}/profile/${nick}/followers`
+  })
+  res.send(html)
 })
 
 app.get("/profile/:nick/following", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "following.html"))
+  const nick = req.params.nick
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("following.html", {
+    title: `@${nick}'s following - txt`,
+    description: `People @${nick} follows on txt`,
+    type: "website",
+    url: `${baseUrl}/profile/${nick}/following`
+  })
+  res.send(html)
+})
+
+app.get("/inbox", (req, res) => {
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("inbox.html", {
+    title: "inbox - txt",
+    description: "Your txt inbox",
+    type: "website",
+    url: `${baseUrl}/inbox`
+  })
+  res.send(html)
+})
+
+app.get("/compose", (req, res) => {
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("compose.html", {
+    title: "compose message - txt",
+    description: "Send a message on txt",
+    type: "website",
+    url: `${baseUrl}/compose`
+  })
+  res.send(html)
 })
 
 app.get("/terms", (req, res) => {
@@ -142,16 +279,15 @@ app.get("/hell", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "hell.html"))
 })
 
-app.get("/inbox", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "inbox.html"))
-})
-
-app.get("/compose", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "compose.html"))
-})
-
 app.get("/settings", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "settings.html"))
+  const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get('host')}`
+  const html = generateOGHtml("settings.html", {
+    title: "settings - txt",
+    description: "Manage your txt account settings",
+    type: "website",
+    url: `${baseUrl}/settings`
+  })
+  res.send(html)
 })
 
 app.get("/license", (req, res) => {
