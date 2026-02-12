@@ -3,6 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>txt</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@uploadcare/file-uploader@1/web/uc-file-uploader-regular.min.css">
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
@@ -17,6 +18,9 @@ textarea,input{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222
 button{padding:.4rem .8rem;margin:.2rem;border:1px solid #555;border-radius:.25rem;background:none;color:#aaa;cursor:pointer}
 button:hover{border-color:#eaeaea;color:#fff}
 .post{border-bottom:1px solid #222;padding:.5rem 0;position:relative}
+.post-media{max-width:100%;margin:.5rem 0;border-radius:.5rem}
+.post-media img,.post-media video{max-width:100%;border-radius:.5rem}
+.post-media audio{width:100%}
 .repost-header{color:#777;font-size:.85rem;margin-bottom:.3rem}
 .repost-header a{color:#888}
 .fact-check-warning{background:#221100;border-left:3px solid #f80;padding:.7rem;margin:.5rem 0;font-size:.85rem;color:#ffaa44;border-radius:.25rem}
@@ -47,6 +51,7 @@ a:hover{color:#fff}
 .modal-content{background:#0f0f0f;border:1px solid #333;border-radius:.5rem;padding:1.5rem;max-width:400px;width:90%}
 .modal-content h3{margin-top:0}
 .modal-content button{margin-top:.5rem}
+uc-file-uploader-regular{display:none}
 </style>
 </head>
 <body>
@@ -61,6 +66,7 @@ a:hover{color:#fff}
 </div>
 <textarea id="postinput" maxlength="200" placeholder="write"></textarea>
 <button onclick="createpost()">post</button>
+<button onclick="openUploadcare()">upload</button>
 <button onclick="deleteaccount()" style="float:right;color:#c44">delete account</button>
 <div id="posts"></div>
 <button id="more" onclick="load()">more posts</button>
@@ -85,12 +91,54 @@ a:hover{color:#fff}
   <a href="/rss.xml" style="color:#f80">📡 RSS feed</a>
 </div>
 
-<script>
+<uc-config
+  ctx-name="post-uploader"
+  source-list="local, camera, url"
+  max-local-file-size-bytes="15728640"
+  pubkey="e1c10946e2093cf2bb48"
+></uc-config>
+
+<uc-file-uploader-regular
+  ctx-name="post-uploader"
+  class="uc-dark"
+></uc-file-uploader-regular>
+
+<uc-upload-ctx-provider ctx-name="post-uploader"></uc-upload-ctx-provider>
+
+<script type="module">
+import * as UC from 'https://cdn.jsdelivr.net/npm/@uploadcare/file-uploader@1/web/uc-file-uploader-regular.min.js'
+UC.defineComponents(UC)
+
 if(!localStorage.getItem("nickname")){
   location.href="/"
 }
 
 let nickname=localStorage.getItem("nickname"),offset=0,currentFeed='all',currentRepostId=null
+let uploadedFileUrl=null,uploadedFileType=null
+
+const uploader = document.querySelector('uc-file-uploader-regular')
+
+uploader.addEventListener('file-upload-success', (e) => {
+  const file = e.detail
+  uploadedFileUrl = file.cdnUrl
+  
+  if(file.mimeType.startsWith('video/')){
+    uploadedFileType = 'video'
+    uploadedFileUrl = `${file.cdnUrl}-/format/mp4/-/quality/lighter/`
+  } else if(file.mimeType.startsWith('audio/')){
+    uploadedFileType = 'audio'
+  } else if(file.mimeType === 'image/gif'){
+    uploadedFileType = 'gif'
+  } else {
+    uploadedFileType = 'image'
+  }
+  
+  alert('file uploaded! now write your post')
+})
+
+window.openUploadcare = function(){
+  uploader.style.display = 'block'
+}
 
 function getGreeting() {
   const hour = new Date().getHours()
@@ -244,7 +292,7 @@ document.addEventListener('click', (e) => {
 })
 
 async function reportPost(postId, postUser){
-  const reason = prompt("What's the reason for reporting this post?")
+  const reason = prompt("what's the reason for reporting this post?")
   if(!reason) return
   
   await fetch('/api/report', {
@@ -259,12 +307,12 @@ async function reportPost(postId, postUser){
     })
   })
   
-  alert("Great! Human moderators will review it shortly.")
+  alert("great! human moderators will review it shortly.")
   toggleMenu(postId)
 }
 
 async function reportUser(postId, postUser){
-  const reason = prompt("What's the reason for reporting this user?")
+  const reason = prompt("what's the reason for reporting this user?")
   if(!reason) return
   
   await fetch('/api/report', {
@@ -278,12 +326,12 @@ async function reportUser(postId, postUser){
     })
   })
   
-  alert("Great! Human moderators will review it shortly.")
+  alert("great! human moderators will review it shortly.")
   toggleMenu(postId)
 }
 
 async function reportBoth(postId, postUser){
-  const reason = prompt("What's the reason for reporting this user and post?")
+  const reason = prompt("what's the reason for reporting this user and post?")
   if(!reason) return
   
   await fetch('/api/report', {
@@ -298,16 +346,16 @@ async function reportBoth(postId, postUser){
     })
   })
   
-  alert("Great! Human moderators will review it shortly.")
+  alert("great! human moderators will review it shortly.")
   toggleMenu(postId)
 }
 
 function sharePost(postId){
   const url = `${window.location.origin}/post/${postId}`
   navigator.clipboard.writeText(url).then(() => {
-    alert("Post link copied to clipboard!")
+    alert("post link copied to clipboard!")
   }).catch(() => {
-    prompt("Copy this link:", url)
+    prompt("copy this link:", url)
   })
   toggleMenu(postId)
 }
@@ -340,22 +388,22 @@ async function confirmRepost(){
   })
   
   if(r.status === 403){
-    alert("You're banned!")
+    alert("you're banned!")
     location.href = '/banned'
     return
   }
   if(r.status === 429){
     const data = await r.json()
-    alert(data.error || "Too many reposts, slow down!")
+    alert(data.error || "too many reposts, slow down!")
     return
   }
   if(!r.ok){
-    alert("Error reposting. Try again.")
+    alert("error reposting. try again.")
     return
   }
   
   closeRepostModal()
-  alert("Reposted!")
+  alert("reposted!")
   
   const btn = document.querySelector(`[data-post-id="${currentRepostId}"] button[onclick*="openRepostModal"]`)
   if(btn){
@@ -408,6 +456,16 @@ async function load(){
     
     let postHTML = `<div>${processContent(p.content)}</div>`
     
+    if(p.media_url){
+      if(p.media_type === 'image' || p.media_type === 'gif'){
+        postHTML += `<div class="post-media"><img src="${p.media_url}" loading="lazy"></div>`
+      } else if(p.media_type === 'video'){
+        postHTML += `<div class="post-media"><video src="${p.media_url}" controls></video></div>`
+      } else if(p.media_type === 'audio'){
+        postHTML += `<div class="post-media"><audio src="${p.media_url}" controls></audio></div>`
+      }
+    }
+    
     if (factCheck) {
       postHTML += `<div class="fact-check-warning">
         <strong>fact check:</strong> ${escapeHtml(factCheck.admin_message)}
@@ -427,10 +485,10 @@ async function load(){
         <div class="menu">
           <button class="dots" onclick="toggleMenu(${p.id})">⋯</button>
           <div id="menu${p.id}" class="dropdown">
-            <button onclick="sharePost(${p.id})">Share Post</button>
-            <button onclick="reportPost(${p.id}, '${p.nickname}')">Report Post</button>
-            <button onclick="reportUser(${p.id}, '${p.nickname}')">Report User</button>
-            <button onclick="reportBoth(${p.id}, '${p.nickname}')">Report Both</button>
+            <button onclick="sharePost(${p.id})">share post</button>
+            <button onclick="reportPost(${p.id}, '${p.nickname}')">report post</button>
+            <button onclick="reportUser(${p.id}, '${p.nickname}')">report user</button>
+            <button onclick="reportBoth(${p.id}, '${p.nickname}')">report both</button>
           </div>
         </div>
       </div>
@@ -458,24 +516,44 @@ function togglecomments(id){
 
 async function createpost(){
   const i=document.getElementById("postinput")
-  if(!i.value.trim()) return
-  const r=await fetch("/api/posts",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,content:i.value})})
+  const content = i.value.trim()
+  
+  if(!content && !uploadedFileUrl){
+    alert("write something or upload media!")
+    return
+  }
+  
+  const r=await fetch("/api/posts",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      nickname,
+      content: content || '',
+      media_url: uploadedFileUrl,
+      media_type: uploadedFileType
+    })
+  })
+  
   if(r.status === 403){
-    alert("You're banned!")
+    alert("you're banned!")
     location.href = '/banned'
     return
   }
   if(r.status === 429){
     const data = await r.json()
-    alert(data.error || "Too many posts, slow down!")
+    alert(data.error || "too many posts, slow down!")
     return
   }
   if(!r.ok){
-    alert("Error posting. Try again.")
+    alert("error posting. try again.")
     return
   }
+  
   const data=await r.json()
   i.value=""
+  uploadedFileUrl=null
+  uploadedFileType=null
+  uploader.style.display='none'
   document.getElementById("posts").innerHTML=""
   offset=0
   load()
@@ -484,7 +562,7 @@ async function createpost(){
 async function react(id,v){
   const r=await fetch("/api/react",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id:id,value:v})})
   if(r.status === 403){
-    alert("You're banned!")
+    alert("you're banned!")
     location.href = '/banned'
     return
   }
@@ -497,17 +575,17 @@ async function sendcomment(post_id){
   if(!input.value.trim()) return
   const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id,content:input.value})})
   if(r.status === 403){
-    alert("You're banned!")
+    alert("you're banned!")
     location.href = '/banned'
     return
   }
   if(r.status === 429){
     const data = await r.json()
-    alert(data.error || "Too many comments, slow down!")
+    alert(data.error || "too many comments, slow down!")
     return
   }
   if(!r.ok){
-    alert("Error commenting. Try again.")
+    alert("error commenting. try again.")
     return
   }
   input.value=""
@@ -532,17 +610,17 @@ async function sendreply(post_id,parent_id){
   if(!input.value.trim()) return
   const r=await fetch("/api/comments",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({nickname,post_id,content:input.value,parent_id})})
   if(r.status === 403){
-    alert("You're banned!")
+    alert("you're banned!")
     location.href = '/banned'
     return
   }
   if(r.status === 429){
     const data = await r.json()
-    alert(data.error || "Too many comments, slow down!")
+    alert(data.error || "too many comments, slow down!")
     return
   }
   if(!r.ok){
-    alert("Error replying. Try again.")
+    alert("error replying. try again.")
     return
   }
   const data=await r.json()
