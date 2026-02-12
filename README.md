@@ -19,9 +19,12 @@ its very small in size of the source code and the backend is built to use as lit
 - customizable profile pages
 - reporting system
 - inboxes
-- email system
+- semi-email system
 - html, css, and js sanitization
 - integration support
+- status with spotify and youtube support
+- rss feeds globally and for each person
+- global APIs
 
 # install
 
