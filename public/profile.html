@@ -3,6 +3,7 @@
 <head>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>profile - txt</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@uploadcare/file-uploader@1/web/uc-file-uploader-regular.min.css">
 <style>
 body{margin:0;font-family:system-ui,sans-serif;background:#0f0f0f;color:#eaeaea}
 #app{max-width:600px;margin:auto;padding:1rem}
@@ -34,6 +35,16 @@ a:hover{color:#fff}
 .activity-content{color:#eaeaea;margin-top:.5rem;font-size:.95rem}
 .activity-platform{color:#888;font-size:.8rem;margin-top:.3rem}
 .hidden{display:none}
+.guestbook-section{margin:2rem 0}
+.guestbook-form{border:1px solid var(--accent-color,#4c4);border-radius:.5rem;padding:1rem;margin-bottom:1rem}
+.gb-entry{border-bottom:1px solid #222;padding:1rem 0}
+.gb-entry:last-child{border-bottom:none}
+.gb-meta{font-size:.8rem;color:#777;margin-bottom:.5rem;display:flex;justify-content:space-between;align-items:center}
+.gb-media{max-width:100%;margin:.5rem 0;border-radius:.5rem}
+.gb-media img,.gb-media video{max-width:100%;border-radius:.5rem}
+.gb-media audio{width:100%}
+textarea{width:100%;background:#0f0f0f;color:#eaeaea;border:1px solid #222;padding:.5rem;margin:.3rem 0;box-sizing:border-box;font-family:system-ui,sans-serif}
+uc-file-uploader-regular{display:none}
 </style>
 </head>
 <body>
@@ -52,7 +63,7 @@ a:hover{color:#fff}
     </div>
     <div class="profile-bio" id="bio"></div>
     <div class="rss-link">
-      <a href="#" onclick="copyRSS(); return false" title="Copy RSS feed URL">📡 RSS feed</a>
+      <a href="#" onclick="copyRSS(); return false" title="copy rss feed url">📡 rss feed</a>
     </div>
   </div>
   <div>
@@ -102,9 +113,38 @@ a:hover{color:#fff}
   <div id="last-post" style="color:#777">no posts yet</div>
 </div>
 
+<div id="guestbook-section" class="guestbook-section hidden">
+  <h3 style="color:var(--accent-color)">guestbook</h3>
+  
+  <div id="guestbook-form" class="guestbook-form hidden">
+    <textarea id="gb-message" maxlength="500" placeholder="leave a message..."></textarea>
+    <button onclick="postToGuestbook()">post</button>
+    <button onclick="openUploadcare()">upload</button>
+  </div>
+  
+  <div id="guestbook-entries"></div>
 </div>
 
-<script>
+</div>
+
+<uc-config
+  ctx-name="my-uploader"
+  source-list="local, camera, url"
+  max-local-file-size-bytes="15728640"
+  pubkey="e1c10946e2093cf2bb48"
+></uc-config>
+
+<uc-file-uploader-regular
+  ctx-name="my-uploader"
+  class="uc-dark"
+></uc-file-uploader-regular>
+
+<uc-upload-ctx-provider ctx-name="my-uploader"></uc-upload-ctx-provider>
+
+<script type="module">
+import * as UC from 'https://cdn.jsdelivr.net/npm/@uploadcare/file-uploader@1/web/uc-file-uploader-regular.min.js'
+UC.defineComponents(UC)
+
 if(!localStorage.getItem("nickname")){
   location.href="/"
 }
@@ -112,6 +152,33 @@ if(!localStorage.getItem("nickname")){
 const currentUser = localStorage.getItem("nickname")
 const profileNick = window.location.pathname.split('/').pop()
 let isFollowing = false
+let uploadedFileUrl = null
+let uploadedFileType = null
+let accentColor = '#4c4'
+
+const uploader = document.querySelector('uc-file-uploader-regular')
+
+uploader.addEventListener('file-upload-success', (e) => {
+  const file = e.detail
+  uploadedFileUrl = file.cdnUrl
+  
+  if(file.mimeType.startsWith('video/')){
+    uploadedFileType = 'video'
+    uploadedFileUrl = `${file.cdnUrl}-/format/mp4/-/quality/lighter/`
+  } else if(file.mimeType.startsWith('audio/')){
+    uploadedFileType = 'audio'
+  } else if(file.mimeType === 'image/gif'){
+    uploadedFileType = 'gif'
+  } else {
+    uploadedFileType = 'image'
+  }
+  
+  alert('file uploaded! now post your message')
+})
+
+window.openUploadcare = function(){
+  uploader.style.display = 'block'
+}
 
 function showFollowers(){
   location.href = `/profile/${profileNick}/followers`
@@ -124,9 +191,9 @@ function showFollowing(){
 function copyRSS(){
   const rssUrl = `${window.location.origin}/rss/${profileNick}.xml`
   navigator.clipboard.writeText(rssUrl).then(() => {
-    alert("RSS feed URL copied to clipboard!")
+    alert("rss feed url copied to clipboard!")
   }).catch(() => {
-    prompt("Copy this RSS feed URL:", rssUrl)
+    prompt("copy this rss feed url:", rssUrl)
   })
 }
 
@@ -170,11 +237,14 @@ async function loadActivity(){
 async function loadProfile(){
   const r = await fetch(`/api/profile/${profileNick}`)
   if(r.status === 404){
-    document.getElementById('app').innerHTML = '<h2>User not found</h2>'
+    document.getElementById('app').innerHTML = '<h2>user not found</h2>'
     return
   }
   
   const data = await r.json()
+  
+  accentColor = data.guestbook_color || '#4c4'
+  document.documentElement.style.setProperty('--accent-color', accentColor)
   
   document.getElementById('username').textContent = '@' + data.nickname
   document.getElementById('follower-count').textContent = data.followers || 0
@@ -204,7 +274,122 @@ async function loadProfile(){
     checkFollowStatus()
   }
   
+  if(data.guestbook_enabled){
+    document.getElementById('guestbook-section').classList.remove('hidden')
+    if(profileNick.toLowerCase() !== currentUser.toLowerCase()){
+      document.getElementById('guestbook-form').classList.remove('hidden')
+    }
+    loadGuestbook()
+  }
+  
   loadActivity()
+}
+
+async function loadGuestbook() {
+  const r = await fetch(`/api/guestbook/${profileNick}`)
+  const data = await r.json()
+  
+  const container = document.getElementById('guestbook-entries')
+  container.innerHTML = ''
+  
+  if(data.entries.length === 0){
+    container.innerHTML = '<div style="color:#777;text-align:center;padding:2rem">no entries yet</div>'
+    return
+  }
+  
+  data.entries.forEach(entry => {
+    const div = document.createElement('div')
+    div.className = 'gb-entry'
+    
+    let mediaHtml = ''
+    if (entry.media_url) {
+      if (entry.media_type === 'image' || entry.media_type === 'gif') {
+        mediaHtml = `<div class="gb-media"><img src="${entry.media_url}" loading="lazy"></div>`
+      } else if (entry.media_type === 'video') {
+        mediaHtml = `<div class="gb-media"><video src="${entry.media_url}" controls></video></div>`
+      } else if (entry.media_type === 'audio') {
+        mediaHtml = `<div class="gb-media"><audio src="${entry.media_url}" controls></audio></div>`
+      }
+    }
+    
+    const deleteBtn = profileNick.toLowerCase() === currentUser.toLowerCase() ? 
+      `<button onclick="deleteEntry(${entry.id})" style="padding:.2rem .5rem;font-size:.8rem">delete</button>` : ''
+    
+    div.innerHTML = `
+      <div class="gb-meta">
+        <div>
+          <a href="/profile/${entry.author_nick}">@${entry.author_nick}</a>
+          <span> · ${timeago(entry.created_at)}</span>
+        </div>
+        ${deleteBtn}
+      </div>
+      ${entry.message ? `<div style="color:#eaeaea">${escapeHtml(entry.message)}</div>` : ''}
+      ${mediaHtml}
+    `
+    
+    container.appendChild(div)
+  })
+}
+
+window.postToGuestbook = async function() {
+  const message = document.getElementById('gb-message').value.trim()
+  
+  if (!message && !uploadedFileUrl) {
+    alert('write a message or upload media!')
+    return
+  }
+  
+  const r = await fetch('/api/guestbook', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({
+      user_nick: profileNick,
+      author_nick: currentUser,
+      message: message || null,
+      media_url: uploadedFileUrl,
+      media_type: uploadedFileType
+    })
+  })
+  
+  if (r.status === 403) {
+    const data = await r.json()
+    if(data.banned){
+      alert("you're banned!")
+      location.href = '/banned'
+    } else {
+      alert("guestbook is disabled")
+    }
+    return
+  }
+  
+  if (r.status === 429) {
+    alert("too many posts, slow down!")
+    return
+  }
+  
+  if (!r.ok) {
+    alert("error posting. try again.")
+    return
+  }
+  
+  document.getElementById('gb-message').value = ''
+  uploadedFileUrl = null
+  uploadedFileType = null
+  uploader.style.display = 'none'
+  
+  loadGuestbook()
+}
+
+window.deleteEntry = async function(id) {
+  if (!confirm('delete this guestbook entry?')) return
+  
+  await fetch(`/api/guestbook/${id}`, {
+    method: 'DELETE',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ nickname: currentUser })
+  })
+  
+  loadGuestbook()
 }
 
 async function checkFollowStatus(){
@@ -271,6 +456,11 @@ function timeago(t){
   if(d<7) return d+"d ago"
   return Math.floor(d/7)+"w ago"
 }
+
+window.showFollowers = showFollowers
+window.showFollowing = showFollowing
+window.copyRSS = copyRSS
+window.toggleFollow = toggleFollow
 
 loadProfile()
 setInterval(loadActivity, 10000)
