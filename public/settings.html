@@ -16,6 +16,12 @@ button:hover{border-color:#eaeaea;color:#fff}
 .error{color:#c44;font-size:.85rem;margin:.5rem 0}
 .success{color:#4c4;font-size:.85rem;margin:.5rem 0}
 .hint{font-size:.8rem;color:#666;margin:.3rem 0}
+.checkbox-label{display:flex;align-items:center;margin-top:.5rem}
+.checkbox-label input{width:auto;margin-right:.5rem}
+.color-grid{display:flex;gap:1rem;margin-top:.5rem;flex-wrap:wrap}
+.color-option{display:flex;align-items:center}
+.color-option input{width:auto;margin-right:.3rem}
+#guestbook-settings{display:none;margin-top:1rem}
 </style>
 </head>
 <body>
@@ -24,23 +30,23 @@ button:hover{border-color:#eaeaea;color:#fff}
 <button onclick="location.href='/feed'">← back to feed</button>
 <button onclick="location.href='/profile/'+nickname">view profile</button>
 
-<label>Bio</label>
-<div class="hint">Tell people about yourself (200 chars max)</div>
+<label>bio</label>
+<div class="hint">tell people about yourself (200 chars max)</div>
 <textarea id="bio" maxlength="200" placeholder="your bio..."></textarea>
 <div class="char-count"><span id="bio-count">0</span>/200</div>
 
-<label>Status</label>
-<div class="hint">How are you feeling? (50 chars max)</div>
+<label>status</label>
+<div class="hint">how are you feeling? (50 chars max)</div>
 <input id="status" maxlength="50" placeholder="vibing, tired, chaotic...">
 <div class="char-count"><span id="status-count">0</span>/50</div>
 
-<label>Pronouns</label>
-<div class="hint">Optional (50 chars max)</div>
+<label>pronouns</label>
+<div class="hint">optional (50 chars max)</div>
 <input id="pronouns" maxlength="50" placeholder="she/her, he/him, they/them...">
 <div class="char-count"><span id="pronouns-count">0</span>/50</div>
 
-<label>Timezone</label>
-<div class="hint">Helps others know when you're active</div>
+<label>timezone</label>
+<div class="hint">helps others know when you're active</div>
 <select id="timezone">
 <option value="UTC">UTC</option>
 <option value="America/New_York">EST (New York)</option>
@@ -65,10 +71,48 @@ button:hover{border-color:#eaeaea;color:#fff}
 <option value="Pacific/Auckland">NZST (Auckland)</option>
 </select>
 
+<label>guestbook</label>
+<div class="hint">let people leave messages & media on your profile</div>
+<label class="checkbox-label">
+  <input type="checkbox" id="guestbook-enabled">
+  enable guestbook
+</label>
+
+<div id="guestbook-settings">
+  <label>guestbook accent color</label>
+  <div class="hint">pick a color for your guestbook theme</div>
+  <div class="color-grid">
+    <label class="color-option">
+      <input type="radio" name="gb-color" value="#4c4">
+      <span style="color:#4c4">● green</span>
+    </label>
+    <label class="color-option">
+      <input type="radio" name="gb-color" value="#88f">
+      <span style="color:#88f">● blue</span>
+    </label>
+    <label class="color-option">
+      <input type="radio" name="gb-color" value="#f4a">
+      <span style="color:#f4a">● pink</span>
+    </label>
+    <label class="color-option">
+      <input type="radio" name="gb-color" value="#fa4">
+      <span style="color:#fa4">● orange</span>
+    </label>
+    <label class="color-option">
+      <input type="radio" name="gb-color" value="#f44">
+      <span style="color:#f44">● red</span>
+    </label>
+    <label class="color-option">
+      <input type="radio" name="gb-color" value="#af4">
+      <span style="color:#af4">● yellow</span>
+    </label>
+  </div>
+</div>
+
 <div class="error" id="error"></div>
 <div class="success" id="success"></div>
 
-<button onclick="save()">Save Changes</button>
+<button onclick="save()">save changes</button>
 </div>
 
 <script>
@@ -90,6 +134,10 @@ document.getElementById('pronouns').addEventListener('input',e=>{
   document.getElementById('pronouns-count').textContent=e.target.value.length
 })
 
+document.getElementById('guestbook-enabled').addEventListener('change',e=>{
+  document.getElementById('guestbook-settings').style.display=e.target.checked?'block':'none'
+})
+
 async function loadSettings(){
   const r=await fetch(`/api/profile/${nickname}`)
   if(!r.ok) return
@@ -99,6 +147,12 @@ async function loadSettings(){
   document.getElementById('status').value=data.status || ''
   document.getElementById('pronouns').value=data.pronouns || ''
   document.getElementById('timezone').value=data.timezone || 'UTC'
+  document.getElementById('guestbook-enabled').checked=data.guestbook_enabled || false
+  
+  const colorRadio=document.querySelector(`input[name="gb-color"][value="${data.guestbook_color || '#4c4'}"]`)
+  if(colorRadio) colorRadio.checked=true
+  
+  document.getElementById('guestbook-settings').style.display=data.guestbook_enabled?'block':'none'
   
   document.getElementById('bio-count').textContent=data.bio?.length || 0
   document.getElementById('status-count').textContent=data.status?.length || 0
@@ -110,6 +164,8 @@ async function save(){
   const status=document.getElementById('status').value.trim()
   const pronouns=document.getElementById('pronouns').value.trim()
   const timezone=document.getElementById('timezone').value
+  const guestbook_enabled=document.getElementById('guestbook-enabled').checked
+  const guestbook_color=document.querySelector('input[name="gb-color"]:checked')?.value || '#4c4'
   
   const err=document.getElementById('error')
   const success=document.getElementById('success')
@@ -120,7 +176,7 @@ async function save(){
   const r=await fetch('/api/profile/update',{
     method:'POST',
     headers:{'Content-Type':'application/json'},
-    body:JSON.stringify({nickname,bio,status,pronouns,timezone})
+    body:JSON.stringify({nickname,bio,status,pronouns,timezone,guestbook_enabled,guestbook_color})
   })
   
   if(!r.ok){
