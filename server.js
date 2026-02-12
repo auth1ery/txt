@@ -538,6 +538,12 @@ async function initDB() {
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='guestbook_color') THEN
         ALTER TABLE users ADD COLUMN guestbook_color TEXT DEFAULT '#4c4';
       END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='media_url') THEN
+        ALTER TABLE posts ADD COLUMN media_url TEXT;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='posts' AND column_name='media_type') THEN
+        ALTER TABLE posts ADD COLUMN media_type TEXT;
+      END IF;
     END $$;
   `)
 }
@@ -702,18 +708,18 @@ app.get("/api/post/:id", async (req, res) => {
 })
 
 app.post("/api/posts", postLimiter, async (req, res) => {
-  const { nickname, content } = req.body
-  if (!content || content.length > 200) return res.sendStatus(400)
+  const { nickname, content, media_url, media_type } = req.body
+  if ((!content || content.length > 200) && !media_url) return res.sendStatus(400)
   
-  const sanitized = sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} })
-  if (containsProfanity(sanitized)) return res.sendStatus(400)
+  const sanitized = content ? sanitizeHtml(content, { allowedTags: [], allowedAttributes: {} }) : ''
+  if (sanitized && containsProfanity(sanitized)) return res.sendStatus(400)
   
   const ban = await checkBan(nickname)
   if (ban) return res.status(403).json({ banned: true })
   
   const result = await pool.query(
-    "INSERT INTO posts(nickname, content, created_at) VALUES($1, $2, $3) RETURNING id",
-    [nickname, sanitized, Date.now()]
+    "INSERT INTO posts(nickname, content, media_url, media_type, created_at) VALUES($1, $2, $3, $4, $5) RETURNING id",
+    [nickname, sanitized, media_url || null, media_type || null, Date.now()]
   )
   
   rssFeedCache.global.timestamp = 0
@@ -737,11 +743,11 @@ app.post("/api/posts", postLimiter, async (req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          content: `**new post created:**\n\ncontent: ${sanitized}\nuploader: ${nickname}\nview on: https://txt-ctgm.onrender.com/`
+          content: `**new post created:**\n\ncontent: ${sanitized}\nmedia: ${media_url ? 'yes' : 'no'}\nuploader: ${nickname}\nview on: https://txt-ctgm.onrender.com/`
         })
       })
     } catch (error) {
-      console.error('Failed to send Discord webhook:', error)
+      console.error('failed to send discord webhook:', error)
     }
   }
   
