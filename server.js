@@ -502,7 +502,19 @@ async function initDB() {
       platform TEXT,
       timestamp BIGINT
     );
+
+    CREATE TABLE IF NOT EXISTS guestbook (
+      id SERIAL PRIMARY KEY,
+      user_nick TEXT,
+      author_nick TEXT,
+      message TEXT,
+      media_url TEXT,
+      media_type TEXT,
+      created_at BIGINT
+    );
     
+    CREATE INDEX IF NOT EXISTS idx_guestbook_user ON guestbook(user_nick);
+
     DO $$ 
     BEGIN
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='bio') THEN
@@ -519,6 +531,12 @@ async function initDB() {
       END IF;
       IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='rng_linked') THEN
         ALTER TABLE users ADD COLUMN rng_linked BOOLEAN DEFAULT FALSE;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='guestbook_enabled') THEN
+          ALTER TABLE users ADD COLUMN guestbook_enabled BOOLEAN DEFAULT FALSE;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='users' AND column_name='guestbook_color') THEN
+        ALTER TABLE users ADD COLUMN guestbook_color TEXT DEFAULT '#4c4';
       END IF;
     END $$;
   `)
@@ -893,6 +911,62 @@ app.get("/api/notifications/unread/:nickname", async (req, res) => {
   res.json({ count: result.rows[0].c })
 })
 
+app.get("/api/guestbook/:nickname", async (req, res) => {
+  const nickname = req.params.nickname.toLowerCase()
+  const result = await pool.query(
+    "SELECT * FROM guestbook WHERE user_nick = $1 ORDER BY created_at DESC LIMIT 50",
+    [nickname]
+  )
+  res.json({ entries: result.rows })
+})
+
+app.post("/api/guestbook", postLimiter, async (req, res) => {
+  const { user_nick, author_nick, message, media_url, media_type } = req.body
+  
+  if (!user_nick || !author_nick) return res.sendStatus(400)
+  if (message && message.length > 500) return res.sendStatus(400)
+  
+  const ban = await checkBan(author_nick)
+  if (ban) return res.status(403).json({ banned: true })
+  
+  const userCheck = await pool.query(
+    "SELECT guestbook_enabled FROM users WHERE nickname = $1",
+    [user_nick.toLowerCase()]
+  )
+  
+  if (userCheck.rows.length === 0 || !userCheck.rows[0].guestbook_enabled) {
+    return res.status(403).json({ error: "guestbook disabled" })
+  }
+  
+  const sanitizedMessage = message ? sanitizeHtml(message, { allowedTags: [], allowedAttributes: {} }) : null
+  
+  await pool.query(
+    "INSERT INTO guestbook(user_nick, author_nick, message, media_url, media_type, created_at) VALUES($1, $2, $3, $4, $5, $6)",
+    [user_nick.toLowerCase(), author_nick.toLowerCase(), sanitizedMessage, media_url, media_type, Date.now()]
+  )
+  
+  if (user_nick.toLowerCase() !== author_nick.toLowerCase()) {
+    await createNotification(user_nick.toLowerCase(), 'guestbook', author_nick.toLowerCase())
+  }
+  
+  res.sendStatus(200)
+})
+
+app.delete("/api/guestbook/:id", async (req, res) => {
+  const id = req.params.id
+  const { nickname } = req.body
+  
+  const entry = await pool.query("SELECT user_nick FROM guestbook WHERE id = $1", [id])
+  if (entry.rows.length === 0) return res.sendStatus(404)
+  
+  if (entry.rows[0].user_nick !== nickname.toLowerCase()) {
+    return res.sendStatus(403)
+  }
+  
+  await pool.query("DELETE FROM guestbook WHERE id = $1", [id])
+  res.sendStatus(200)
+})
+
 app.post("/api/notifications/read/:id", async (req, res) => {
   const id = req.params.id
   await pool.query("UPDATE notifications SET read = TRUE WHERE id = $1", [id])
@@ -1012,7 +1086,7 @@ app.get("/api/profile/:nick", async (req, res) => {
 })
 
 app.post("/api/profile/update", async (req, res) => {
-  const { nickname, bio, status, timezone, pronouns } = req.body
+  const { nickname, bio, status, timezone, pronouns, guestbook_enabled, guestbook_color } = req.body
   if (!nickname) return res.sendStatus(400)
   
   if (bio && bio.length > 200) return res.sendStatus(400)
@@ -1024,8 +1098,8 @@ app.post("/api/profile/update", async (req, res) => {
   const sanitizedPronouns = pronouns ? sanitizeHtml(pronouns, { allowedTags: [], allowedAttributes: {} }) : ''
   
   await pool.query(
-    "UPDATE users SET bio = $1, status = $2, timezone = $3, pronouns = $4 WHERE nickname = $5",
-    [sanitizedBio, sanitizedStatus, timezone || 'UTC', sanitizedPronouns, nickname.toLowerCase()]
+    "UPDATE users SET bio = $1, status = $2, timezone = $3, pronouns = $4, guestbook_enabled = $5, guestbook_color = $6 WHERE nickname = $7",
+    [sanitizedBio, sanitizedStatus, timezone || 'UTC', sanitizedPronouns, guestbook_enabled || false, guestbook_color || '#4c4', nickname.toLowerCase()]
   )
   
   res.sendStatus(200)
